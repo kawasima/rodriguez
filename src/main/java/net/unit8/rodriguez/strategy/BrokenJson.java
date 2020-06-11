@@ -18,7 +18,7 @@ public class BrokenJson implements HttpInstabilityStrategy, MetricsAvailable {
     @Override
     public void handle(HttpExchange exchange) throws InterruptedException {
         String responseBody = "{";
-        try(exchange) {
+        try {
             TimeUnit.MILLISECONDS.sleep(delay);
             byte[] body = responseBody.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().put("Content-Type", List.of("application/json"));
@@ -31,8 +31,10 @@ public class BrokenJson implements HttpInstabilityStrategy, MetricsAvailable {
             if (Objects.equals(e.getMessage(), "Broken pipe")) {
                 getMetricRegistry().counter(MetricRegistry.name(BrokenJson.class, "client-timeout")).inc();
             } else {
-
+                getMetricRegistry().counter(MetricRegistry.name(BrokenJson.class, "other-error")).inc();
             }
+        } finally {
+            exchange.close();
         }
     }
 }

@@ -1,7 +1,5 @@
 package net.unit8.rodriguez.configuration;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import net.unit8.rodriguez.InstabilityStrategy;
 
 import java.io.Serializable;
@@ -9,22 +7,26 @@ import java.util.Map;
 import java.util.Optional;
 
 public class HarnessConfig implements Serializable {
-    private final Map<Integer, InstabilityStrategy<?>> ports;
-    private final Integer controlPort;
-
-    @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
-    public HarnessConfig(
-            @JsonProperty("controlPort") Integer controlPort,
-            @JsonProperty("ports") Map<Integer, InstabilityStrategy<?>> ports) {
-        this.controlPort = controlPort;
-        this.ports = ports;
-    }
+    private Map<Integer, InstabilityStrategy<?>> ports;
+    private Integer controlPort;
 
     public Map<Integer, InstabilityStrategy<?>> getPorts() {
         return ports;
     }
 
+    public HarnessConfig() {
+
+    }
+
+    public void setPorts(Map<Integer, InstabilityStrategy<?>> ports) {
+        this.ports = ports;
+    }
+
     public Optional<Integer> getControlPort() {
         return Optional.ofNullable(controlPort);
+    }
+
+    public void setControlPort(Integer controlPort) {
+        this.controlPort = controlPort;
     }
 }

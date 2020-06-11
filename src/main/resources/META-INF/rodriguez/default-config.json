@@ -1,17 +1,30 @@
 {
+  "controlPort": 10200,
   "ports": {
     "10201": {
-      "type": "net.unit8.rodriguez.strategy.NotAccept"
+      "type": "net.unit8.rodriguez.strategy.RefuseConnection"
     },
     "10202": {
-      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST"
+      "type": "net.unit8.rodriguez.strategy.NotAccept"
     },
     "10203": {
-      "type": "net.unit8.rodriguez.strategy.NeverDrain"
+      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST"
     },
     "10204": {
+      "type": "net.unit8.rodriguez.strategy.NeverDrain"
+    },
+    "10205": {
       "type": "net.unit8.rodriguez.strategy.SlowResponse",
       "interval": 3000
+    },
+    "10206": {
+      "type": "net.unit8.rodriguez.strategy.ContentTypeMismatch"
+    },
+    "10207": {
+      "type": "net.unit8.rodriguez.strategy.ResponseHeaderOnly"
+    },
+    "10208": {
+      "type": "net.unit8.rodriguez.strategy.BrokenJson"
     }
   }
 }

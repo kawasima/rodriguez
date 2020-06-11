@@ -2,6 +2,8 @@ package net.unit8.rodriguez.strategy;
 
 import com.sun.net.httpserver.HttpExchange;
 import net.unit8.rodriguez.HttpInstabilityStrategy;
+import net.unit8.rodriguez.MetricsAvailable;
+import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -10,7 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public class ContentTypeMismatch implements HttpInstabilityStrategy {
+public class ContentTypeMismatch implements HttpInstabilityStrategy, MetricsAvailable {
     private String contentType = "application/json";
     private String responseBody = "<html><body>unknown error</body></html>";
     private int responseStatus = 400;
@@ -26,12 +28,15 @@ public class ContentTypeMismatch implements HttpInstabilityStrategy {
             OutputStream os = exchange.getResponseBody();
             os.write(body);
             os.flush();
+            getMetricRegistry().counter(MetricRegistry.name(ContentTypeMismatch.class, "handle-complete")).inc();
         } catch (IOException e) {
             if (Objects.equals(e.getMessage(), "Broken pipe")) {
-
+                getMetricRegistry().counter(MetricRegistry.name(ContentTypeMismatch.class, "client-timeout")).inc();
             } else {
-
+                getMetricRegistry().counter(MetricRegistry.name(ContentTypeMismatch.class, "other-error")).inc();
             }
+        } finally {
+            exchange.close();
         }
     }
 

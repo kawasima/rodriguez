@@ -16,7 +16,7 @@ public class SlowResponse implements HttpInstabilityStrategy, MetricsAvailable {
 
     @Override
     public void handle(HttpExchange exchange) throws InterruptedException {
-        try (exchange) {
+        try {
             exchange.sendResponseHeaders(200, 5000);
             OutputStream os = exchange.getResponseBody();
             for (int i = 0; i < 5000; i++) {
@@ -29,8 +29,10 @@ public class SlowResponse implements HttpInstabilityStrategy, MetricsAvailable {
             if (Objects.equals(e.getMessage(), "Broken pipe")) {
                 getMetricRegistry().counter(MetricRegistry.name(SlowResponse.class, "client-timeout")).inc();
             } else {
-
+                getMetricRegistry().counter(MetricRegistry.name(SlowResponse.class, "other-error")).inc();
             }
+        } finally {
+            exchange.close();
         }
     }
 

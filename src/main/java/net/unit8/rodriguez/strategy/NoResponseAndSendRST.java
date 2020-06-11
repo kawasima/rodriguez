@@ -12,6 +12,8 @@ import java.util.logging.Logger;
 
 public class NoResponseAndSendRST implements SocketInstabilityStrategy, MetricsAvailable {
     private static final Logger LOG = Logger.getLogger(NoResponseAndSendRST.class.getName());
+    private long delay = 5000;
+
     @Override
     public void handle(Socket socket) throws InterruptedException {
         try {
@@ -19,11 +21,21 @@ public class NoResponseAndSendRST implements SocketInstabilityStrategy, MetricsA
         } catch(SocketException e) {
             LOG.log(Level.SEVERE, "SO_LINGER", e);
         }
-        TimeUnit.SECONDS.sleep(5);
+        TimeUnit.SECONDS.sleep(delay);
         try {
-            socket.close();
+            if (!socket.isClosed()) {
+                socket.close();
+            }
         } catch(IOException e) {
             LOG.log(Level.SEVERE, "Close error", e);
         }
+    }
+
+    public long getDelay() {
+        return delay;
+    }
+
+    public void setDelay(long delay) {
+        this.delay = delay;
     }
 }

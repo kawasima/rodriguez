@@ -12,10 +12,16 @@ import java.util.concurrent.TimeUnit;
 
 import static picocli.CommandLine.*;
 
-@Command(name = "rodriguez")
+@Command(name = "rodriguez", version = "0.1.0-SNAPSHOT")
 public class HarnessServerCommand implements Callable<Integer>, IExitCodeExceptionMapper {
     @Option(names = {"-c", "--config"})
     private File configFile;
+
+    @Option(names = {"-V", "--version"}, versionHelp = true, description = "display version info")
+    boolean versionInfoRequested;
+
+    @Option(names = {"-h", "--help"}, usageHelp = true, description = "display this help message")
+    boolean usageHelpRequested;
 
     @Override
     public Integer call() throws Exception {
@@ -34,12 +40,22 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
     }
 
     @Override
-    public int getExitCode(Throwable throwable) {
+    public int getExitCode(Throwable t) {
+        t.printStackTrace();
         return 1;
     }
 
     public static void main(String[] args) {
-        int exitCode = new CommandLine(new HarnessServerCommand()).execute(args);
+        CommandLine commandLine = new CommandLine(new HarnessServerCommand());
+        commandLine.parseArgs(args);
+        if (commandLine.isUsageHelpRequested()) {
+            commandLine.usage(System.out);
+            return;
+        } else if (commandLine.isVersionHelpRequested()) {
+            commandLine.printVersionHelp(System.out);
+            return;
+        }
+        int exitCode = commandLine.execute(args);
         System.exit(exitCode);
     }
 }

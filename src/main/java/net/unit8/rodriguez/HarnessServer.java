@@ -3,10 +3,12 @@ package net.unit8.rodriguez;
 import net.unit8.rodriguez.configuration.ConfigParser;
 import net.unit8.rodriguez.configuration.HarnessConfig;
 import net.unit8.rodriguez.metrics.MetricRegistry;
+import org.w3c.dom.ls.LSOutput;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class HarnessServer {
     private final HarnessConfig config;
@@ -16,7 +18,7 @@ public class HarnessServer {
     private ExecutorService executor;
 
     public HarnessServer() {
-        try (InputStream is = HarnessConfig.class.getResourceAsStream("/META-INF/rodriguez/default-config.json")) {
+        try (InputStream is = HarnessConfig.class.getClassLoader().getResourceAsStream("META-INF/rodriguez/default-config.json")) {
             ConfigParser parser = new ConfigParser();
             config = parser.parse(is);
         } catch (IOException e) {
@@ -37,6 +39,10 @@ public class HarnessServer {
             server = strategy.createServer(executor, port);
         }
         return server;
+    }
+
+    public void start() {
+        start(Executors.newCachedThreadPool());
     }
 
     public void start(ExecutorService executor) {

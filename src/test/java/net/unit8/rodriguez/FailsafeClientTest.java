@@ -8,14 +8,11 @@ import okhttp3.Request;
 import okhttp3.Response;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.time.Duration;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class FailsafeClientTest {
     RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
@@ -28,8 +25,7 @@ public class FailsafeClientTest {
     @BeforeAll
     static void setup() {
         server = new HarnessServer();
-        ExecutorService executor = Executors.newCachedThreadPool();
-        server.start(executor);
+        server.start();
     }
 
     @AfterAll
