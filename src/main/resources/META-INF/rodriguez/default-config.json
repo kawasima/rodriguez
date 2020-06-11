@@ -4,6 +4,12 @@
       "type": "net.unit8.rodriguez.strategy.NotAccept"
     },
     "10202": {
+      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST"
+    },
+    "10203": {
+      "type": "net.unit8.rodriguez.strategy.NeverDrain"
+    },
+    "10204": {
       "type": "net.unit8.rodriguez.strategy.SlowResponse",
       "interval": 3000
     }

@@ -5,8 +5,10 @@ import net.unit8.rodriguez.configuration.HarnessConfig;
 import picocli.CommandLine;
 
 import java.io.File;
-import java.io.InputStream;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static picocli.CommandLine.*;
 
@@ -17,17 +19,16 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
 
     @Override
     public Integer call() throws Exception {
-        HarnessConfig config;
+        HarnessServer server;
         ConfigParser parser = new ConfigParser();
         if (configFile != null && configFile.exists()) {
-            config = parser.parse(configFile);
+            HarnessConfig config = parser.parse(configFile);
+            server = new HarnessServer(config);
         } else {
-            try (InputStream is = HarnessConfig.class.getResourceAsStream("/META-INF/rodriguez/default-config.json")) {
-                config = parser.parse(is);
-            }
+            server = new HarnessServer();
         }
         ExecutorService executor = Executors.newCachedThreadPool();
-        new HarnessServer(config).start(executor);
+        server.start(executor);
         executor.awaitTermination(10, TimeUnit.MINUTES);
         return 0;
     }
