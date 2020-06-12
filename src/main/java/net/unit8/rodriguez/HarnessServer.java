@@ -3,17 +3,21 @@ package net.unit8.rodriguez;
 import net.unit8.rodriguez.configuration.ConfigParser;
 import net.unit8.rodriguez.configuration.HarnessConfig;
 import net.unit8.rodriguez.metrics.MetricRegistry;
-import org.w3c.dom.ls.LSOutput;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class HarnessServer {
     private final HarnessConfig config;
     private final MetricRegistry metricRegistry = new MetricRegistry();
+    private final Object lock = new Object();
+    private boolean terminated;
 
+    private List<Runnable> servers;
     private ControlServer controlServer;
     private ExecutorService executor;
 
@@ -30,15 +34,14 @@ public class HarnessServer {
         this.config = config;
     }
 
-    public <SERVER> SERVER createServer(InstabilityStrategy<SERVER> strategy, int port) {
-        SERVER server = null;
+    public Runnable createServer(InstabilityStrategy strategy, int port) {
         if (strategy instanceof MetricsAvailable) {
             ((MetricsAvailable) strategy).setMetricRegistry(metricRegistry);
         }
         if (strategy.canListen()) {
-            server = strategy.createServer(executor, port);
+            return strategy.createServer(executor, port);
         }
-        return server;
+        return () -> {};
     }
 
     public void start() {
@@ -46,12 +49,22 @@ public class HarnessServer {
     }
 
     public void start(ExecutorService executor) {
-        config.getControlPort().ifPresent(p -> {
-            controlServer = new ControlServer(p, this);
-        });
+        config.getControlPort().ifPresent(p -> controlServer = new ControlServer(p, this));
 
         this.executor = executor;
-        config.getPorts().forEach((key, value) -> executor.execute(() -> createServer(value, key)));
+        servers = config.getPorts()
+                .entrySet()
+                .stream()
+                .map(entry -> createServer(entry.getValue(), entry.getKey()))
+                .collect(Collectors.toList());
+    }
+
+    public void await() throws InterruptedException {
+        synchronized (lock) {
+            while(!terminated) {
+                lock.wait();
+            }
+        }
     }
 
     public HarnessConfig getConfig() {
@@ -59,12 +72,17 @@ public class HarnessServer {
     }
 
     public void shutdown() {
-        if (executor != null) {
-            executor.shutdown();
-        }
+        synchronized (lock) {
+            if (executor != null) {
+                executor.shutdown();
+            }
+            servers.forEach(Runnable::run);
 
-        if (controlServer != null) {
-            controlServer.shutdown();
+            if (controlServer != null) {
+                controlServer.shutdown();
+            }
+            terminated = true;
+            lock.notifyAll();
         }
     }
 }

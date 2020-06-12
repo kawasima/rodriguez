@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.Reader;
 import java.time.Duration;
+import java.util.Objects;
 
 public class FailsafeClientTest {
     RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
@@ -48,7 +49,7 @@ public class FailsafeClientTest {
         Response response = Failsafe.with(timeout, retryPolicy)
                 .get(() -> client.newCall(request).execute());
         char[] cbuf = new char[1024];
-        Reader reader = response.body().charStream();
+        Reader reader = Objects.requireNonNull(response.body()).charStream();
         StringBuilder sb = new StringBuilder();
         while(true) {
             int read = reader.read(cbuf, 0, cbuf.length);
@@ -71,7 +72,7 @@ public class FailsafeClientTest {
         Response response = Failsafe.with(timeout, retryPolicy)
                 .get(() -> client.newCall(request).execute());
         char[] cbuf = new char[1024];
-        Reader reader = response.body().charStream();
+        Reader reader = Objects.requireNonNull(response.body()).charStream();
         StringBuilder sb = new StringBuilder();
         while(true) {
             int read = reader.read(cbuf, 0, cbuf.length);

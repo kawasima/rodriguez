@@ -7,10 +7,10 @@ import java.util.Map;
 import java.util.Optional;
 
 public class HarnessConfig implements Serializable {
-    private Map<Integer, InstabilityStrategy<?>> ports;
+    private Map<Integer, InstabilityStrategy> ports;
     private Integer controlPort;
 
-    public Map<Integer, InstabilityStrategy<?>> getPorts() {
+    public Map<Integer, InstabilityStrategy> getPorts() {
         return ports;
     }
 
@@ -18,7 +18,7 @@ public class HarnessConfig implements Serializable {
 
     }
 
-    public void setPorts(Map<Integer, InstabilityStrategy<?>> ports) {
+    public void setPorts(Map<Integer, InstabilityStrategy> ports) {
         this.ports = ports;
     }
 

@@ -43,4 +43,12 @@ public class SlowResponse implements HttpInstabilityStrategy, MetricsAvailable {
     public void setInterval(long interval) {
         this.interval = interval;
     }
+
+    public byte getSentChar() {
+        return sentChar;
+    }
+
+    public void setSentChar(byte sentChar) {
+        this.sentChar = sentChar;
+    }
 }

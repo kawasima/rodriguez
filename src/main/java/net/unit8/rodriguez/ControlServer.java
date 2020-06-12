@@ -14,9 +14,9 @@ import java.util.Arrays;
 import java.util.NoSuchElementException;
 
 public class ControlServer implements HttpHandler {
-    private HttpServer server;
-    private HarnessServer harnessServer;
-    private ObjectMapper mapper;
+    private final HttpServer server;
+    private final HarnessServer harnessServer;
+    private final ObjectMapper mapper;
 
     public ControlServer(int port, HarnessServer harnessServer) {
         mapper = new ObjectMapper()
@@ -42,7 +42,7 @@ public class ControlServer implements HttpHandler {
                 case SHUTDOWN:
                     exchange.sendResponseHeaders(200, 0L);
                     exchange.close();
-                    harnessServer.shutdown();
+                    new Thread(harnessServer::shutdown).start();
                     break;
                 case CONFIG:
                     byte[] body = mapper.writerFor(HarnessConfig.class).writeValueAsBytes(harnessServer.getConfig());
@@ -68,8 +68,8 @@ public class ControlServer implements HttpHandler {
             this.path = path;
             this.method = method;
         }
-        private String path;
-        private String method;
+        private final String path;
+        private final String method;
 
         static ControlMethod of(String path, String method) {
             return Arrays.stream(values())

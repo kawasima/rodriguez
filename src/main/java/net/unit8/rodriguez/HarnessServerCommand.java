@@ -8,7 +8,6 @@ import java.io.File;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static picocli.CommandLine.*;
 
@@ -35,7 +34,7 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
         }
         ExecutorService executor = Executors.newCachedThreadPool();
         server.start(executor);
-        executor.awaitTermination(10, TimeUnit.MINUTES);
+        server.await();
         return 0;
     }
 

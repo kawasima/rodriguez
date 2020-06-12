@@ -6,38 +6,47 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.Executor;
 
-public interface SocketInstabilityStrategy extends InstabilityStrategy<ServerSocket> {
+public interface SocketInstabilityStrategy extends InstabilityStrategy {
     default boolean canAccept() {
         return true;
     }
 
-
     @Override
-    default ServerSocket createServer(Executor executor, int port) {
+    default Runnable createServer(Executor executor, int port) {
         try {
             ServerSocket server = new ServerSocket(port);
-
-            executor.execute(() -> {
-                boolean interrupted = false;
-                while (!interrupted) {
+            Thread serverThread = new Thread(() -> {
+                while (!Thread.interrupted()) {
                     try (Socket socket = server.accept()) {
-                        handle(socket);
-                    } catch (InterruptedException e) {
-                        interrupted = true;
-                    } catch (IOException e) {
+                        executor.execute(() -> {
+                            try {
+                                handle(socket);
+                            } catch (InterruptedException ie) {
 
+                            }
+                        });
+                    } catch (IOException e) {
+                        if (!server.isClosed()) {
+                            e.printStackTrace();
+                        }
                     }
                 }
             });
+            serverThread.start();
+            return () -> {
+                try {
+                    server.close();
+                } catch (IOException e) {
 
-            return server;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+                }
+                serverThread.interrupt();
+            };
+        } catch (IOException ioe) {
+            throw new UncheckedIOException(ioe);
         }
     }
 
     default void handle(Socket socket) throws InterruptedException {
 
     }
-
 }

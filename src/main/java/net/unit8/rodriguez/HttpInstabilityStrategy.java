@@ -9,25 +9,22 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
 
-public interface HttpInstabilityStrategy extends InstabilityStrategy<HttpServer> {
+public interface HttpInstabilityStrategy extends InstabilityStrategy {
     @Override
-    default HttpServer createServer(Executor executor, int port) {
+    default Runnable createServer(Executor executor, int port) {
         InetSocketAddress address = new InetSocketAddress(port);
         try {
             HttpServer httpServer = HttpServer.create(address, 0);
             httpServer.setExecutor(executor);
-            httpServer.createContext("/", new HttpHandler() {
-                @Override
-                public void handle(HttpExchange exchange) throws IOException {
-                    try {
-                        getInstance().handle(exchange);
-                    } catch (InterruptedException e) {
-                        httpServer.stop(0);
-                    }
+            httpServer.createContext("/", exchange -> {
+                try {
+                    getInstance().handle(exchange);
+                } catch (InterruptedException e) {
+                    httpServer.stop(0);
                 }
             });
             httpServer.start();
-            return httpServer;
+            return () -> httpServer.stop(0);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -39,7 +36,7 @@ public interface HttpInstabilityStrategy extends InstabilityStrategy<HttpServer>
 
     default void handle(HttpExchange exchange) throws InterruptedException {
         try {
-            exchange.sendResponseHeaders(404, 0l);
+            exchange.sendResponseHeaders(404, 0L);
         } catch (IOException e) {
 
         }

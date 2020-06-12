@@ -32,7 +32,6 @@ public class MetricRegistry {
         metrics = new ConcurrentHashMap<>();
     }
 
-    @SuppressWarnings("unchecked")
     public <T extends Metric> T register(String name, T metric) {
          final Metric existing = metrics.putIfAbsent(name, metric);
          return metric;
@@ -53,7 +52,7 @@ public class MetricRegistry {
     }
 
    private interface MetricBuilder<T extends Metric> {
-        MetricBuilder<Counter> COUNTERS = new MetricBuilder<Counter>() {
+        MetricBuilder<Counter> COUNTERS = new MetricBuilder<>() {
             @Override
             public Counter newMetric() {
                 return new Counter();
@@ -61,7 +60,7 @@ public class MetricRegistry {
 
             @Override
             public boolean isInstance(Metric metric) {
-                return Counter.class.isInstance(metric);
+                return metric instanceof Counter;
             }
         };
 
