@@ -1,6 +1,7 @@
 package net.unit8.rodriguez.strategy;
 
 import net.unit8.rodriguez.SocketInstabilityStrategy;
+import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -17,13 +18,17 @@ public class NeverDrain implements SocketInstabilityStrategy {
         try {
             socket.setReceiveBufferSize(64 * 1024);
             TimeUnit.DAYS.sleep(1);
+            getMetricRegistry().counter(MetricRegistry.name(getClass(), "handle-complete")).inc();
         } catch(SocketException e) {
-            LOG.log(Level.SEVERE, "Receive Buffer size", e);
-        }
-        try {
-            socket.close();
-        } catch(IOException e) {
-            LOG.log(Level.SEVERE, "Close error", e);
+            getMetricRegistry().counter(MetricRegistry.name(getClass(), "other-error")).inc();
+        } finally {
+            try {
+                if (!socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                getMetricRegistry().counter(MetricRegistry.name(getClass(), "other-error")).inc();
+            }
         }
     }
 }

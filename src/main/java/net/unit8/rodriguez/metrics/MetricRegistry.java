@@ -1,5 +1,7 @@
 package net.unit8.rodriguez.metrics;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -39,6 +41,10 @@ public class MetricRegistry {
 
     public Counter counter(String name) {
         return getOrAdd(name, MetricBuilder.COUNTERS);
+    }
+
+    public Map<String, Metric> getMetrics() {
+        return Collections.unmodifiableMap(metrics);
     }
 
     @SuppressWarnings("unchecked")

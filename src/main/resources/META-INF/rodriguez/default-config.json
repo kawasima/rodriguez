@@ -8,14 +8,15 @@
       "type": "net.unit8.rodriguez.strategy.NotAccept"
     },
     "10203": {
-      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST"
+      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST",
+      "delay": 3000
     },
     "10204": {
       "type": "net.unit8.rodriguez.strategy.NeverDrain"
     },
     "10205": {
       "type": "net.unit8.rodriguez.strategy.SlowResponse",
-      "interval": 3000
+      "interval": 1000
     },
     "10206": {
       "type": "net.unit8.rodriguez.strategy.ContentTypeMismatch"

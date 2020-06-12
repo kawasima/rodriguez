@@ -6,6 +6,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import net.unit8.rodriguez.configuration.HarnessConfig;
+import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -44,12 +45,22 @@ public class ControlServer implements HttpHandler {
                     exchange.close();
                     new Thread(harnessServer::shutdown).start();
                     break;
-                case CONFIG:
+                case CONFIG: {
                     byte[] body = mapper.writerFor(HarnessConfig.class).writeValueAsBytes(harnessServer.getConfig());
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);
                     exchange.close();
                     break;
+                }
+                case METRICS: {
+                    byte[] body = mapper.writeValueAsBytes(harnessServer.getMetricRegistry().getMetrics());
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                    break;
+                }
             }
         } catch (NoSuchElementException e) {
             exchange.sendResponseHeaders(404, 0L);
@@ -62,6 +73,7 @@ public class ControlServer implements HttpHandler {
 
     private enum ControlMethod {
         CONFIG("/config", "GET"),
+        METRICS("/metrics", "GET"),
         SHUTDOWN("/shutdown", "POST");
 
         ControlMethod(String path, String method) {

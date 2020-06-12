@@ -1,15 +1,17 @@
 package net.unit8.rodriguez;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
 
-public interface HttpInstabilityStrategy extends InstabilityStrategy {
+public interface HttpInstabilityStrategy extends InstabilityStrategy, MetricsAvailable {
     @Override
     default Runnable createServer(Executor executor, int port) {
         InetSocketAddress address = new InetSocketAddress(port);
@@ -18,6 +20,7 @@ public interface HttpInstabilityStrategy extends InstabilityStrategy {
             httpServer.setExecutor(executor);
             httpServer.createContext("/", exchange -> {
                 try {
+                    getMetricRegistry().counter(MetricRegistry.name(getClass(), "call")).inc();
                     getInstance().handle(exchange);
                 } catch (InterruptedException e) {
                     httpServer.stop(0);
@@ -30,6 +33,7 @@ public interface HttpInstabilityStrategy extends InstabilityStrategy {
         }
     }
 
+    @JsonIgnore
     default HttpInstabilityStrategy getInstance() {
         return this;
     }

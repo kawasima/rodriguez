@@ -2,12 +2,13 @@ package net.unit8.rodriguez.strategy;
 
 import net.unit8.rodriguez.MetricsAvailable;
 import net.unit8.rodriguez.SocketInstabilityStrategy;
+import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class NoResponseAndSendRST implements SocketInstabilityStrategy, MetricsAvailable {
@@ -19,15 +20,17 @@ public class NoResponseAndSendRST implements SocketInstabilityStrategy, MetricsA
         try {
             socket.setSoLinger(true, 0);
         } catch(SocketException e) {
-            LOG.log(Level.SEVERE, "SO_LINGER", e);
+            getMetricRegistry().counter(MetricRegistry.name(getClass(), "other-error")).inc();
+            throw new UncheckedIOException(e);
         }
-        TimeUnit.SECONDS.sleep(delay);
+        TimeUnit.MILLISECONDS.sleep(delay);
         try {
             if (!socket.isClosed()) {
                 socket.close();
             }
         } catch(IOException e) {
-            LOG.log(Level.SEVERE, "Close error", e);
+            getMetricRegistry().counter(MetricRegistry.name(getClass(), "other-error")).inc();
+            throw new UncheckedIOException(e);
         }
     }
 

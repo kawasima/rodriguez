@@ -71,6 +71,10 @@ public class HarnessServer {
         return this.config;
     }
 
+    public MetricRegistry getMetricRegistry() {
+        return this.metricRegistry;
+    }
+
     public void shutdown() {
         synchronized (lock) {
             if (executor != null) {
