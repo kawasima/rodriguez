@@ -62,6 +62,12 @@ Start HarnessServer before you run tests.
     }
 ```
 
+### Docker
+
+```
+% docker pull kawasima/rodriguez
+% docker run -it --rm -p 10200-10208:10200-10208 kawasima/rodriguez
+```
 ### Native build
 
 ```
@@ -109,4 +115,24 @@ Start HarnessServer before you run tests.
   },
   "controlPort": 10200
 }
+```
+
+### Display metrics
+
+```
+% http://localhost:10200/metrics | jq
+{
+  "net.unit8.rodriguez.strategy.SlowResponse.client-timeout": {
+    "count": 1
+  },
+  "net.unit8.rodriguez.strategy.SlowResponse.call": {
+    "count": 1
+  }
+}
+```
+
+### Shutdown the rodriguez
+
+```
+curl -XPOST http://localhost:10200/shutdown
 ```

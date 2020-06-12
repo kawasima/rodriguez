@@ -45,6 +45,11 @@
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>1.6.0</version>
                 </plugin>
+                <plugin>
+                    <groupId>com.google.cloud.tools</groupId>
+                    <artifactId>jib-maven-plugin</artifactId>
+                    <version>2.4.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
@@ -72,6 +77,15 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>net.unit8.rodriguez.HarnessServerCommand</mainClass>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <configuration>
+                    <to>
+                        <image>docker.io/kawasima/rodriguez</image>
+                    </to>
                 </configuration>
             </plugin>
         </plugins>
