@@ -29,10 +29,10 @@ You can map a port to a failure pattern as following configuration.
 {
   "ports": {
     "10201": {
-      "type": "net.unit8.rodriguez.strategy.NotAccept"
+      "type": "net.unit8.rodriguez.behavior.NotAccept"
     },
     "10202": {
-      "type": "net.unit8.rodriguez.strategy.SlowResponse",
+      "type": "net.unit8.rodriguez.behavior.SlowResponse",
       "interval": 3000
     }
   }
@@ -83,34 +83,34 @@ Start HarnessServer before you run tests.
 {
   "ports": {
     "10201": {
-      "type": "net.unit8.rodriguez.strategy.RefuseConnection"
+      "type": "net.unit8.rodriguez.behavior.RefuseConnection"
     },
     "10202": {
-      "type": "net.unit8.rodriguez.strategy.NotAccept"
+      "type": "net.unit8.rodriguez.behavior.NotAccept"
     },
     "10203": {
-      "type": "net.unit8.rodriguez.strategy.NoResponseAndSendRST",
+      "type": "net.unit8.rodriguez.behavior.NoResponseAndSendRST",
       "delay": 5000
     },
     "10204": {
-      "type": "net.unit8.rodriguez.strategy.NeverDrain"
+      "type": "net.unit8.rodriguez.behavior.NeverDrain"
     },
     "10205": {
-      "type": "net.unit8.rodriguez.strategy.SlowResponse",
+      "type": "net.unit8.rodriguez.behavior.SlowResponse",
       "interval": 3000
     },
     "10206": {
-      "type": "net.unit8.rodriguez.strategy.ContentTypeMismatch",
+      "type": "net.unit8.rodriguez.behavior.ContentTypeMismatch",
       "responseStatus": 400,
       "responseBody": "<html><body>unknown error</body></html>",
       "contentType": "application/json",
       "delay": 1000
     },
     "10207": {
-      "type": "net.unit8.rodriguez.strategy.ResponseHeaderOnly"
+      "type": "net.unit8.rodriguez.behavior.ResponseHeaderOnly"
     },
     "10208": {
-      "type": "net.unit8.rodriguez.strategy.BrokenJson"
+      "type": "net.unit8.rodriguez.behavior.BrokenJson"
     }
   },
   "controlPort": 10200
@@ -122,10 +122,10 @@ Start HarnessServer before you run tests.
 ```
 % http://localhost:10200/metrics | jq
 {
-  "net.unit8.rodriguez.strategy.SlowResponse.client-timeout": {
+  "net.unit8.rodriguez.behavior.SlowResponse.client-timeout": {
     "count": 1
   },
-  "net.unit8.rodriguez.strategy.SlowResponse.call": {
+  "net.unit8.rodriguez.behavior.SlowResponse.call": {
     "count": 1
   }
 }

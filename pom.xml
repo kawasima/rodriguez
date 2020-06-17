@@ -1,19 +1,57 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>net.unit8.rodriguez</groupId>
-    <artifactId>rodriguez</artifactId>
+    <artifactId>rodriguez-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
-    <name>rodriguez</name>
+    <name>rodriguez-parent</name>
+    <url>https://github.com/kawasima/rodriguez.git</url>
 
     <properties>
-        <jackson.version>2.11.0</jackson.version>
-        <picocli.version>4.3.2</picocli.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <github.global.server>github</github.global.server>
     </properties>
+
+    <modules>
+        <module>rodriguez-core</module>
+        <module>rodriguez-jdbc</module>
+    </modules>
+
+    <inceptionYear>2020</inceptionYear>
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>kawasima</id>
+            <name>Yoshitaka Kawashima</name>
+            <email>kawasima1016@gmail.com</email>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <distributionManagement>
+        <repository>
+            <id>sonatype-nexus-staging</id>
+            <name>Nexus Release Repository</name>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+          </repository>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -29,6 +67,11 @@
                     <configuration>
                         <source>8</source>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.0.0-M4</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -52,61 +95,9 @@
                 </plugin>
             </plugins>
         </pluginManagement>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <release>11</release>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>info.picocli</groupId>
-                            <artifactId>picocli-codegen</artifactId>
-                            <version>${picocli.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                    <compilerArgs>
-                        <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
-                        <arg>-Aother.resource.patterns=META-INF/rodriguez/.*.json</arg>
-                        <arg>-Adisable.reflect.config=true</arg>
-                    </compilerArgs>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>exec-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>net.unit8.rodriguez.HarnessServerCommand</mainClass>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>com.google.cloud.tools</groupId>
-                <artifactId>jib-maven-plugin</artifactId>
-                <configuration>
-                    <to>
-                        <image>docker.io/kawasima/rodriguez</image>
-                    </to>
-                </configuration>
-            </plugin>
-        </plugins>
     </build>
 
     <dependencies>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.datatype</groupId>
-            <artifactId>jackson-datatype-jdk8</artifactId>
-            <version>${jackson.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>info.picocli</groupId>
-            <artifactId>picocli</artifactId>
-            <version>${picocli.version}</version>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -120,47 +111,8 @@
             <version>3.16.1</version>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>net.jodah</groupId>
-            <artifactId>failsafe</artifactId>
-            <version>2.4.0</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>4.7.2</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
-
     <profiles>
-        <profile>
-            <id>graalvm</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>com.oracle.substratevm</groupId>
-                        <artifactId>native-image-maven-plugin</artifactId>
-                        <version>19.2.1</version>
-                        <executions>
-                            <execution>
-                                <goals>
-                                    <goal>native-image</goal>
-                                </goals>
-                                <phase>package</phase>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <mainClass>net.unit8.rodriguez.HarnessServerCommand</mainClass>
-                            <imageName>rodriguez</imageName>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
         <profile>
             <id>release</id>
             <build>
