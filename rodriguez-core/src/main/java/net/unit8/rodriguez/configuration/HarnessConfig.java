@@ -3,22 +3,17 @@ package net.unit8.rodriguez.configuration;
 import net.unit8.rodriguez.InstabilityBehavior;
 
 import java.io.Serializable;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 public class HarnessConfig implements Serializable {
-    private Map<Integer, ? extends InstabilityBehavior> ports;
+    private Map<Integer, InstabilityBehavior> ports;
     private Integer controlPort;
 
-    public Map<Integer, ? extends InstabilityBehavior> getPorts() {
-        return ports;
+    public Map<Integer, InstabilityBehavior> getPorts() {
+        return Objects.requireNonNullElse(ports, Collections.emptyMap());
     }
 
-    public HarnessConfig() {
-
-    }
-
-    public void setPorts(Map<Integer, ? extends InstabilityBehavior> ports) {
+    public void setPorts(Map<Integer, InstabilityBehavior> ports) {
         this.ports = ports;
     }
 
@@ -28,5 +23,13 @@ public class HarnessConfig implements Serializable {
 
     public void setControlPort(Integer controlPort) {
         this.controlPort = controlPort;
+    }
+
+    public void merge(HarnessConfig config) {
+        config.getControlPort().ifPresent(this::setControlPort);
+        if (ports == null) {
+            ports = new HashMap<>();
+        }
+        ports.putAll(config.getPorts());
     }
 }

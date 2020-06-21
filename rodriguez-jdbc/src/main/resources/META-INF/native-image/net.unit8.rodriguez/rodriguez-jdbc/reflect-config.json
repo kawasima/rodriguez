@@ -1,0 +1,7 @@
+[
+  {
+    "name": "net.unit8.rodriguez.jdbc.behavior.MockDatabase",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  }
+]

@@ -16,16 +16,14 @@ public class SQLStatement {
     private final String sqlId;
 
     private boolean parsed = false;
-    private SQLExecutionType type;
+    private JDBCCommand type;
     private List<String> columns;
 
     public SQLStatement(String sql) {
         this.sql = sql;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            digest.reset();
-            digest.update(sql.getBytes(StandardCharsets.UTF_8));
-            this.sqlId = String.format("%040x", new BigInteger(1, digest.digest()));
+            this.sqlId = new BigInteger(1, digest.digest(sql.getBytes(StandardCharsets.UTF_8))).toString(16);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Does not support SHA-1");
         }
@@ -55,7 +53,7 @@ public class SQLStatement {
         return columns;
     }
 
-    public SQLExecutionType getType() {
+    public JDBCCommand getType() {
         synchronized (this) {
             if (!parsed) {
                 parse();
@@ -64,15 +62,15 @@ public class SQLStatement {
         return type;
     }
 
-    public BufferedReader createFixtureReader() {
+    public BufferedReader createFixtureReader(File baseDirectory) {
         try {
-            return new BufferedReader(new FileReader(new File("data", sqlId + ".csv")));
+            return new BufferedReader(new FileReader(new File(baseDirectory, sqlId + ".csv")));
         } catch (FileNotFoundException e) {
             throw new UncheckedIOException(e);
         }
     }
     public void write(DataOutputStream os) throws IOException {
-        os.writeInt(JDBCCommand.EXECUTE.ordinal());
+        os.writeInt(getType().ordinal());
         os.writeUTF(sql);
     }
 }

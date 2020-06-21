@@ -44,7 +44,7 @@ public class RodriguezDriver implements Driver {
 
     @Override
     public boolean jdbcCompliant() {
-        return false;
+        return true;
     }
 
     @Override

@@ -6,16 +6,28 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.URI;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
 public class ConnectionImpl implements Connection {
     private final Socket socket;
+    private boolean readOnly = false;
+    private boolean closed = false;
+    private boolean autoCommit = false;
+
+    private int networkTimeout = 0;
+    private Executor networkTimeoutExecutor;
+    private String catalog;
+    private String schema;
+    private int transactionIsolation = Connection.TRANSACTION_NONE;
+    private Map<String, Class<?>> typeMap = new HashMap<>();
+    private int holdability;
+
     public ConnectionImpl(String url, Properties info) throws SQLException {
         String name = url.substring("jdbc:rodriguez:".length());
         URI uri = URI.create(name);
@@ -26,69 +38,58 @@ public class ConnectionImpl implements Connection {
         }
     }
 
-    ResultSet executeQuery(SQLStatement sqlStmt) throws IOException {
-        DataOutputStream os = new DataOutputStream(socket.getOutputStream());
-        sqlStmt.write(os);
-        os.flush();
-
-        DataInputStream dis = new DataInputStream(socket.getInputStream());
-        int columnNum = dis.readInt();
-        List<String> columnNames = new ArrayList<>();
-        for (int i = 0; i < columnNum; i++) {
-            columnNames.add(dis.readUTF());
-        }
-        ResultSetMetaDataImpl meta = new ResultSetMetaDataImpl(columnNames);
-        return new ResultSetImpl(meta, dis, os);
-    }
-
     @Override
     public Statement createStatement() throws SQLException {
         return new StatementImpl(this);
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql) throws SQLException {
+        return new PreparedStatementImpl(this, new SQLStatement(sql));
     }
 
     @Override
     public CallableStatement prepareCall(String s) throws SQLException {
+        assertNotClosed();
         return null;
     }
 
     @Override
     public String nativeSQL(String s) throws SQLException {
+        assertNotClosed();
         return null;
     }
 
     @Override
-    public void setAutoCommit(boolean b) throws SQLException {
-
+    public void setAutoCommit(boolean autoCommit) throws SQLException {
+        assertNotClosed();
+        this.autoCommit = autoCommit;
     }
 
     @Override
     public boolean getAutoCommit() throws SQLException {
-        return false;
+        assertNotClosed();
+        return autoCommit;
     }
 
     @Override
     public void commit() throws SQLException {
-
+        assertNotClosed();
     }
 
     @Override
     public void rollback() throws SQLException {
-
+        assertNotClosed();
     }
 
     @Override
     public void close() throws SQLException {
-
+        closed = true;
     }
 
     @Override
     public boolean isClosed() throws SQLException {
-        return false;
+        return closed;
     }
 
     @Override
@@ -97,33 +98,36 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public void setReadOnly(boolean b) throws SQLException {
-
+    public void setReadOnly(boolean readOnly) throws SQLException {
+        this.readOnly = readOnly;
     }
 
     @Override
     public boolean isReadOnly() throws SQLException {
-        return false;
+        return readOnly;
     }
 
     @Override
-    public void setCatalog(String s) throws SQLException {
-
+    public void setCatalog(String catalog) throws SQLException {
+        this.catalog = catalog;
     }
 
     @Override
     public String getCatalog() throws SQLException {
-        return null;
+        return catalog;
     }
 
     @Override
-    public void setTransactionIsolation(int i) throws SQLException {
-
+    public void setTransactionIsolation(int transactionIsolation) throws SQLException {
+        if (transactionIsolation < Connection.TRANSACTION_NONE || transactionIsolation >= Connection.TRANSACTION_SERIALIZABLE * 2) {
+            throw new IllegalArgumentException("transaction isolation level is not valid");
+        }
+        this.transactionIsolation = transactionIsolation;
     }
 
     @Override
     public int getTransactionIsolation() throws SQLException {
-        return 0;
+        return transactionIsolation;
     }
 
     @Override
@@ -137,38 +141,38 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public Statement createStatement(int i, int i1) throws SQLException {
-        return null;
+    public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException {
+        return createStatement();
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s, int i, int i1) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
+        return prepareStatement(sql);
     }
 
     @Override
-    public CallableStatement prepareCall(String s, int i, int i1) throws SQLException {
+    public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency) throws SQLException {
         return null;
     }
 
     @Override
     public Map<String, Class<?>> getTypeMap() throws SQLException {
-        return null;
+        return typeMap;
     }
 
     @Override
     public void setTypeMap(Map<String, Class<?>> map) throws SQLException {
-
+        typeMap = map;
     }
 
     @Override
-    public void setHoldability(int i) throws SQLException {
-
+    public void setHoldability(int holdability) throws SQLException {
+        this.holdability = holdability;
     }
 
     @Override
     public int getHoldability() throws SQLException {
-        return 0;
+        return holdability;
     }
 
     @Override
@@ -197,8 +201,8 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s, int i, int i1, int i2) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql,  int resultSetType, int resultSetConcurrency, int resultSetHoldability) throws SQLException {
+        return prepareStatement(sql);
     }
 
     @Override
@@ -207,18 +211,18 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s, int i) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql, int autoGeneratedKeys) throws SQLException {
+        return prepareStatement(sql);
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s, int[] ints) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException {
+        return prepareStatement(sql);
     }
 
     @Override
-    public PreparedStatement prepareStatement(String s, String[] strings) throws SQLException {
-        return null;
+    public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException {
+        return prepareStatement(sql);
     }
 
     @Override
@@ -242,8 +246,8 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public boolean isValid(int i) throws SQLException {
-        return false;
+    public boolean isValid(int timeout) throws SQLException {
+        return socket.isConnected();
     }
 
     @Override
@@ -277,13 +281,14 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public void setSchema(String s) throws SQLException {
-
+    public void setSchema(String schema) throws SQLException {
+        this.schema = schema;
     }
 
     @Override
     public String getSchema() throws SQLException {
-        return null;
+        assertNotClosed();
+        return schema;
     }
 
     @Override
@@ -292,22 +297,51 @@ public class ConnectionImpl implements Connection {
     }
 
     @Override
-    public void setNetworkTimeout(Executor executor, int i) throws SQLException {
-
+    public void setNetworkTimeout(Executor executor, int networkTimeout) throws SQLException {
+        assertNotClosed();
+        this.networkTimeout = networkTimeout;
+        this.networkTimeoutExecutor = executor;
     }
 
     @Override
     public int getNetworkTimeout() throws SQLException {
-        return 0;
+        assertNotClosed();
+        return networkTimeout;
+    }
+
+    Executor getNetworkTimeoutExecutor() {
+        return networkTimeoutExecutor;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (isWrapperFor(iface)) {
+                return (T) this;
+            }
+        throw new SQLException(iface + " is not a wrapper class");
     }
 
     @Override
-    public <T> T unwrap(Class<T> aClass) throws SQLException {
-        return null;
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        return iface != null && iface.isAssignableFrom(getClass());
     }
 
-    @Override
-    public boolean isWrapperFor(Class<?> aClass) throws SQLException {
-        return false;
+    private void assertNotClosed() throws SQLException {
+        if (isClosed()) {
+            throw new SQLException("Connection is closed");
+        }
+    }
+
+    protected DataInputStream getInputStream() throws IOException {
+        return new DataInputStream(socket.getInputStream());
+    }
+
+    protected DataOutputStream getOutputStream() throws IOException {
+        return new DataOutputStream(socket.getOutputStream());
+    }
+
+    public void setSocketTimeout(int millis) throws SocketException {
+        this.socket.setSoTimeout(millis);
     }
 }

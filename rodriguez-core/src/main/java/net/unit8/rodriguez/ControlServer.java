@@ -6,15 +6,18 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import net.unit8.rodriguez.configuration.HarnessConfig;
-import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ControlServer implements HttpHandler {
+    private static final Logger LOG = Logger.getLogger(ControlServer.class.getName());
+
     private final HttpServer server;
     private final HarnessServer harnessServer;
     private final ObjectMapper mapper;
@@ -42,7 +45,6 @@ public class ControlServer implements HttpHandler {
             switch (controlMethod) {
                 case SHUTDOWN:
                     exchange.sendResponseHeaders(200, 0L);
-                    exchange.close();
                     new Thread(harnessServer::shutdown).start();
                     break;
                 case CONFIG: {
@@ -50,7 +52,6 @@ public class ControlServer implements HttpHandler {
                     exchange.getResponseHeaders().add("Content-Type", "application/json");
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);
-                    exchange.close();
                     break;
                 }
                 case METRICS: {
@@ -58,12 +59,16 @@ public class ControlServer implements HttpHandler {
                     exchange.getResponseHeaders().add("Content-Type", "application/json");
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);
-                    exchange.close();
                     break;
                 }
             }
         } catch (NoSuchElementException e) {
             exchange.sendResponseHeaders(404, 0L);
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.log(Level.SEVERE, "control server error", e);
+        } finally {
+            exchange.close();
         }
     }
 

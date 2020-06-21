@@ -1,0 +1,8 @@
+{
+  "controlPort": 10200,
+  "ports": {
+    "10210": {
+      "type": "net.unit8.rodriguez.jdbc.behavior.MockDatabase"
+    }
+  }
+}

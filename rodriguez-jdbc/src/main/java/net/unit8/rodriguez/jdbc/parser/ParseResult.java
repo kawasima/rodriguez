@@ -1,24 +1,24 @@
 package net.unit8.rodriguez.jdbc.parser;
 
-import net.unit8.rodriguez.jdbc.SQLExecutionType;
+import net.unit8.rodriguez.jdbc.JDBCCommand;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ParseResult implements Serializable {
-    private SQLExecutionType type;
+    private JDBCCommand type;
     private List<String> columns;
 
     ParseResult() {
         columns = new ArrayList<>();
     }
 
-    public SQLExecutionType getType() {
+    public JDBCCommand getType() {
         return type;
     }
 
-    public void setType(SQLExecutionType type) {
+    public void setType(JDBCCommand type) {
         this.type = type;
     }
 

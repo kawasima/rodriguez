@@ -1,15 +1,12 @@
 package net.unit8.rodriguez.jdbc.impl;
 
-import java.io.DataInput;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.List;
 
 public class ResultSetMetaDataImpl implements ResultSetMetaData {
-    private List<String> columns;
+    private final List<String> columns;
 
     public ResultSetMetaDataImpl(List<String> columns) {
         this.columns = columns;
@@ -42,7 +39,7 @@ public class ResultSetMetaDataImpl implements ResultSetMetaData {
 
     @Override
     public int isNullable(int i) throws SQLException {
-        return 0;
+        return ResultSetMetaData.columnNullableUnknown;
     }
 
     @Override
@@ -120,13 +117,17 @@ public class ResultSetMetaDataImpl implements ResultSetMetaData {
         return "java.lang.String";
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public <T> T unwrap(Class<T> aClass) throws SQLException {
-        return null;
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+        if (isWrapperFor(iface)) {
+                return (T) this;
+            }
+        throw new SQLException(iface + " is not a wrapper class");
     }
 
     @Override
-    public boolean isWrapperFor(Class<?> aClass) throws SQLException {
-        return false;
+    public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        return iface != null && iface.isAssignableFrom(getClass());
     }
 }

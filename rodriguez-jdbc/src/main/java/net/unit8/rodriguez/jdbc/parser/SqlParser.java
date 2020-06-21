@@ -10,7 +10,7 @@ import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.select.*;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.upsert.Upsert;
-import net.unit8.rodriguez.jdbc.SQLExecutionType;
+import net.unit8.rodriguez.jdbc.JDBCCommand;
 
 public class SqlParser {
         public ParseResult parse(String sql) throws JSQLParserException {
@@ -18,6 +18,9 @@ public class SqlParser {
             ParseResult parseResult = new ParseResult();
             StatementVisitor statementVisitor = createStatementVisitor(parseResult);
             stmt.accept(statementVisitor);
+            if (parseResult.getType() == null) {
+                throw new IllegalArgumentException("Unsupported sql type");
+            }
             return parseResult;
         }
 
@@ -34,23 +37,23 @@ public class SqlParser {
             return new StatementVisitorAdapter() {
                 @Override
                 public void visit(Update update) {
-                    parseResult.setType(SQLExecutionType.EXECUTE_UPDATE);
+                    parseResult.setType(JDBCCommand.EXECUTE_UPDATE);
                 }
                 @Override
                 public void visit(Insert insert) {
-                    parseResult.setType(SQLExecutionType.EXECUTE_UPDATE);
+                    parseResult.setType(JDBCCommand.EXECUTE_UPDATE);
                 }
                 @Override
                 public void visit(Upsert upsert) {
-                    parseResult.setType(SQLExecutionType.EXECUTE_UPDATE);
+                    parseResult.setType(JDBCCommand.EXECUTE_UPDATE);
                 }
                 @Override
                 public void visit(Delete delete) {
-                    parseResult.setType(SQLExecutionType.EXECUTE_UPDATE);
+                    parseResult.setType(JDBCCommand.EXECUTE_UPDATE);
                 }
                 @Override
                 public void visit(Select select) {
-                    parseResult.setType(SQLExecutionType.EXECUTE_QUERY);
+                    parseResult.setType(JDBCCommand.EXECUTE_QUERY);
                     select.getSelectBody().accept(createSelectVisitor(parseResult));
                 }
             };

@@ -136,3 +136,25 @@ Start HarnessServer before you run tests.
 ```
 curl -XPOST http://localhost:10200/shutdown
 ```
+
+## Instability Behaviors
+
+### RefuseConnection
+
+### NotAccept
+
+TCP connection is established but the server socket doesn't accept.
+
+### NeverDrain
+
+### NoResponseAndSendRST
+
+TCP connection is established but the server socket doesn't reply and send a RST packet.
+
+### ResponseHeaderOnly
+
+### SlowResponse
+
+### MockDatabase
+
+Simulate the slow query in JDBC.

@@ -5,14 +5,26 @@ import net.unit8.rodriguez.configuration.HarnessConfig;
 import picocli.CommandLine;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 
 import static picocli.CommandLine.*;
 
 @Command(name = "rodriguez", version = "0.1.0-SNAPSHOT")
 public class HarnessServerCommand implements Callable<Integer>, IExitCodeExceptionMapper {
+    static {
+        try (InputStream logProps = Thread.currentThread().getContextClassLoader().getResourceAsStream("logging.properties")){
+            LogManager.getLogManager().readConfiguration(logProps);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Option(names = {"-c", "--config"})
     private File configFile;
 

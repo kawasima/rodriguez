@@ -6,12 +6,16 @@ import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class HarnessServer {
+    private static final Logger LOG = Logger.getLogger(HarnessServer.class.getName());
     private final HarnessConfig config;
     private final MetricRegistry metricRegistry = new MetricRegistry();
     private final Object lock = new Object();
@@ -22,9 +26,17 @@ public class HarnessServer {
     private ExecutorService executor;
 
     public HarnessServer() {
-        try (InputStream is = HarnessConfig.class.getClassLoader().getResourceAsStream("META-INF/rodriguez/default-config.json")) {
-            ConfigParser parser = new ConfigParser();
-            config = parser.parse(is);
+        ConfigParser parser = new ConfigParser();
+        config = new HarnessConfig();
+        try {
+            Enumeration<URL> configs = Thread.currentThread().getContextClassLoader().getResources("META-INF/rodriguez/default-config.json");
+            while(configs.hasMoreElements()) {
+                URL url = configs.nextElement();
+                LOG.info("load config:" + url);
+                try(InputStream is = url.openStream()) {
+                    config.merge(parser.parse(is));
+                }
+            }
         } catch (IOException e) {
             throw new IllegalStateException("Can't start with a default configuration", e);
         }
@@ -57,6 +69,7 @@ public class HarnessServer {
                 .stream()
                 .map(entry -> createServer(entry.getValue(), entry.getKey()))
                 .collect(Collectors.toList());
+        LOG.info("rodriguez server has started");
     }
 
     public void await() throws InterruptedException {
@@ -76,6 +89,7 @@ public class HarnessServer {
     }
 
     public void shutdown() {
+        LOG.info("shutdown");
         synchronized (lock) {
             if (executor != null) {
                 executor.shutdown();

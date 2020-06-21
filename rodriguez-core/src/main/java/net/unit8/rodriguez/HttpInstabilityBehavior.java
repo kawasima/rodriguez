@@ -41,7 +41,7 @@ public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAva
         try {
             exchange.sendResponseHeaders(404, 0L);
         } catch (IOException e) {
-
+            throw new UncheckedIOException(e);
         }
     }
 }

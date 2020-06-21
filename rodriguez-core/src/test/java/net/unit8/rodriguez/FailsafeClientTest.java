@@ -51,10 +51,8 @@ public class FailsafeClientTest {
                 .url("http://localhost:10201/")
                 .get()
                 .build();
-        Assertions.assertThatThrownBy(() -> {
-            Failsafe.with(timeout, retryPolicy)
-                    .get(() -> client.newCall(request).execute());
-        }).hasCauseInstanceOf(ConnectException.class);
+        Assertions.assertThatThrownBy(() -> Failsafe.with(timeout, retryPolicy)
+                .get(() -> client.newCall(request).execute())).hasCauseInstanceOf(ConnectException.class);
     }
 
     @Test
@@ -67,10 +65,8 @@ public class FailsafeClientTest {
                 .url("http://localhost:10202/")
                 .get()
                 .build();
-        Assertions.assertThatThrownBy(() -> {
-            Failsafe.with(timeout, retryPolicy)
-                    .get(() -> client.newCall(request).execute());
-        }).hasCauseInstanceOf(SocketTimeoutException.class);
+        Assertions.assertThatThrownBy(() -> Failsafe.with(timeout, retryPolicy)
+                .get(() -> client.newCall(request).execute())).hasCauseInstanceOf(SocketTimeoutException.class);
     }
 
     @Test
@@ -82,9 +78,7 @@ public class FailsafeClientTest {
                 .url("http://localhost:10203/")
                 .get()
                 .build();
-        Assertions.assertThatThrownBy(() -> {
-            client.newCall(request).execute();
-        }).isInstanceOf(SocketException.class)
+        Assertions.assertThatThrownBy(() -> client.newCall(request).execute()).isInstanceOf(SocketException.class)
                 .hasMessageContaining("Connection reset");
     }
 
@@ -119,20 +113,17 @@ public class FailsafeClientTest {
                 .build();
         Response response = Failsafe.with(timeout, retryPolicy)
                 .get(() -> client.newCall(request).execute());
-        Assertions.assertThatThrownBy(() -> {
-            Failsafe.with(timeout)
-                    .run(() -> {
-                char[] cbuf = new char[1024];
-                Reader reader = Objects.requireNonNull(response.body()).charStream();
-                StringBuilder sb = new StringBuilder();
-                while(!Thread.interrupted()) {
-                    int read = reader.read(cbuf, 0, cbuf.length);
-                    if (read <= 0) break;
-                    sb.append(cbuf, 0, read);
-                }
-            });
-
-        }).isInstanceOf(TimeoutExceededException.class);
+        Assertions.assertThatThrownBy(() -> Failsafe.with(timeout)
+                .run(() -> {
+            char[] cbuf = new char[1024];
+            Reader reader = Objects.requireNonNull(response.body()).charStream();
+            StringBuilder sb = new StringBuilder();
+            while(!Thread.interrupted()) {
+                int read = reader.read(cbuf, 0, cbuf.length);
+                if (read <= 0) break;
+                sb.append(cbuf, 0, read);
+            }
+        })).isInstanceOf(TimeoutExceededException.class);
     }
     /**
      * Response has returns once time, but blocking read cause a timeout.

@@ -14,6 +14,10 @@
 
     <name>rodriguez-jdbc</name>
 
+    <properties>
+        <picocli.version>4.3.2</picocli.version>
+    </properties>
+
     <build>
         <plugins>
             <plugin>
@@ -21,6 +25,18 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <release>11</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>info.picocli</groupId>
+                            <artifactId>picocli-codegen</artifactId>
+                            <version>${picocli.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>-Aproject=${project.groupId}/${project.artifactId}</arg>
+                        <arg>-Aother.resource.patterns=META-INF/rodriguez/.*.json</arg>
+                        <arg>-Adisable.reflect.config=true</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
         </plugins>
