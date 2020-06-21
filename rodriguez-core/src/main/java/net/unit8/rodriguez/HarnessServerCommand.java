@@ -15,11 +15,13 @@ import java.util.logging.Logger;
 
 import static picocli.CommandLine.*;
 
-@Command(name = "rodriguez", version = "0.1.0-SNAPSHOT")
+@Command(name = "rodriguez", version = "0.1.0")
 public class HarnessServerCommand implements Callable<Integer>, IExitCodeExceptionMapper {
     static {
         try (InputStream logProps = Thread.currentThread().getContextClassLoader().getResourceAsStream("logging.properties")){
-            LogManager.getLogManager().readConfiguration(logProps);
+            if (logProps != null) {
+                LogManager.getLogManager().readConfiguration(logProps);
+            }
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
