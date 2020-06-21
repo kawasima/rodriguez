@@ -1,5 +1,6 @@
 package net.unit8.rodriguez.jdbc.impl;
 
+import net.unit8.rodriguez.jdbc.JDBCCommand;
 import net.unit8.rodriguez.jdbc.SQLStatement;
 
 import java.io.DataInputStream;
@@ -13,8 +14,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ConnectionImpl implements Connection {
+    private static final Logger LOG = Logger.getLogger(ConnectionImpl.class.getName());
     private final Socket socket;
     private boolean readOnly = false;
     private boolean closed = false;
@@ -84,7 +88,16 @@ public class ConnectionImpl implements Connection {
 
     @Override
     public void close() throws SQLException {
-        closed = true;
+        try (DataOutputStream is = new DataOutputStream(socket.getOutputStream())) {
+            is.writeInt(JDBCCommand.CLOSE.ordinal());
+            if (!socket.isClosed()) {
+                socket.close();
+            }
+            closed = true;
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "connection close error", e);
+            throw new SQLException(e);
+        }
     }
 
     @Override

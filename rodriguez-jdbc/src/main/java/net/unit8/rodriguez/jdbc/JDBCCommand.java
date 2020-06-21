@@ -5,4 +5,5 @@ public enum JDBCCommand {
     EXECUTE_UPDATE,
     RS_NEXT,
     QUERY_TIMEOUT,
+    CLOSE,
 }

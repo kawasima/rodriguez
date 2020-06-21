@@ -85,9 +85,21 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
             DelayTimer timer = null;
             StatementSession session = null;
             while(!Thread.interrupted()) {
-                JDBCCommand command = JDBCCommand.values()[is.readInt()];
+                if (socket.isClosed()) {
+                    throw new EOFException("socket closed");
+                }
+                int commandIndex = is.readInt();
+                if (commandIndex < 0 || commandIndex >= JDBCCommand.values().length) {
+                    throw new IOException("Command is invalid [" + commandIndex + "]");
+                }
+                JDBCCommand command = JDBCCommand.values()[commandIndex];
 
                 switch (command) {
+                    case CLOSE: {
+                        socket.close();
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                     case EXECUTE_QUERY: {
                         if (session != null && session.reader != null) {
                             try {
@@ -140,6 +152,9 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
                         throw new IllegalArgumentException("Unknown command: " + command);
                 }
             }
+        } catch (EOFException e) {
+            LOG.log(Level.SEVERE, "Connection is closed");
+            getMetricRegistry().counter(MetricRegistry.name(MockDatabase.class, "other-error")).inc();
         } catch (IOException e) {
             LOG.log(Level.SEVERE, "Socket error", e);
             getMetricRegistry().counter(MetricRegistry.name(MockDatabase.class, "other-error")).inc();

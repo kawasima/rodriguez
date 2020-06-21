@@ -41,6 +41,8 @@ You can map a port to a failure pattern as following configuration.
 
 ## Get started
 
+Rodriguez requires JDK 11 or higher.
+
 ### Use JUnit
 
 Start HarnessServer before you run tests.
@@ -66,8 +68,9 @@ Start HarnessServer before you run tests.
 
 ```
 % docker pull kawasima/rodriguez
-% docker run -it --rm -p 10200-10208:10200-10208 kawasima/rodriguez
+% docker run -it --rm -p 10200-10210:10200-10210 kawasima/rodriguez
 ```
+
 ### Native build
 
 ```
@@ -141,20 +144,53 @@ curl -XPOST http://localhost:10200/shutdown
 
 ### RefuseConnection
 
+Default port: 10201
+
+Refuse a TCP connection. Client should be
+
 ### NotAccept
 
-TCP connection is established but the server socket doesn't accept.
+Default port: 10202
 
-### NeverDrain
+TCP connection can be established but the remote end doesn't accept.
 
 ### NoResponseAndSendRST
 
+Default port: 10203
+
 TCP connection is established but the server socket doesn't reply and send a RST packet.
 
-### ResponseHeaderOnly
+### NeverDrain
 
-### SlowResponse
+Default port: 10204
 
-### MockDatabase
+TCP connection can be established but the remote end doesn't read the packet.
 
-Simulate the slow query in JDBC.
+### ResponseHeaderOnly (HTTP)
+
+Default port: 10207
+
+The HTTP Request can be accepted and the server response headers, but never send the response body.
+
+### SlowResponse (HTTP)
+
+Default port: 10205
+
+The HTTP Request can be accepted and the server response successfully, but very slowly.
+
+### MockDatabase (JDBC)
+
+Default port: 10210
+
+This behavior can simulate the slow query in JDBC.
+When you set the JDBC url `jdbc:rodriguez://localhost:10210`, Connect the mock database.
+Rodriguez mock server returns dummy data for each query. Put the csv files in the data directory (default: ./data).
+The naming convention of the data file is SHA-1 of the query with `.csv` extension.
+
+```
+% cat > "data/$(echo -n 'SELECT id, name FROM emp' | sha1sum | cut -b 1-40).csv"
+id,name
+1,aaa
+2,bbb
+3,ccc
+```
