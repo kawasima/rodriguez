@@ -187,6 +187,14 @@ When you set the JDBC url `jdbc:rodriguez://localhost:10210`, Connect the mock d
 Rodriguez mock server returns dummy data for each query. Put the csv files in the data directory (default: ./data).
 The naming convention of the data file is SHA-1 of the query with `.csv` extension.
 
+| property | description | default |
+| --- | --- | --- |
+| dataDirectory | The directory of result set files | ./data |
+| delayExecution | The delayed time at executing the query  | 1000 (ms) |
+| delayResultSetNext| The delayed time at calling the ResultSet#next | 200 (ms) |
+
+The naming convention of the data file for a query is following:
+
 ```
 % cat > "data/$(echo -n 'SELECT id, name FROM emp' | sha1sum | cut -b 1-40).csv"
 id,name
