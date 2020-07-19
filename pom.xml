@@ -4,7 +4,7 @@
 
     <groupId>net.unit8.rodriguez</groupId>
     <artifactId>rodriguez-parent</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>rodriguez-parent</name>
@@ -18,6 +18,7 @@
     <modules>
         <module>rodriguez-core</module>
         <module>rodriguez-jdbc</module>
+        <module>rodriguez-aws-sdk</module>
     </modules>
 
     <inceptionYear>2020</inceptionYear>

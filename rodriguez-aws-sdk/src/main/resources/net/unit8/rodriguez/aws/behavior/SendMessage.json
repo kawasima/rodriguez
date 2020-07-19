@@ -1,0 +1,10 @@
+{
+  "SendMessageResult": {
+    "MD5OfMessageBody": "",
+    "MD5OfMessageAttributes": "",
+    "MessageId": ""
+  },
+  "ResponseMetadata": {
+    "RequestId": ""
+  }
+}

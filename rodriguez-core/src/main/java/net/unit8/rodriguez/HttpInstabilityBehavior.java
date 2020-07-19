@@ -3,11 +3,15 @@ package net.unit8.rodriguez;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsServer;
 import net.unit8.rodriguez.metrics.MetricRegistry;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.Executor;
 
 public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAvailable {
