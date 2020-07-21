@@ -42,3 +42,6 @@ buildNumber.properties
 .vscode
 .settings
 .project
+
+# Node
+node_modules

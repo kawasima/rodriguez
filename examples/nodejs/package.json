@@ -1,0 +1,10 @@
+{
+  "name": "rodriguez-node-example",
+  "private": true,
+  "scripts": {
+    "sqs": "node src/sqs.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.716.0"
+  }
+}
