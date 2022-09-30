@@ -1,6 +1,5 @@
 package net.unit8.rodriguez.jdbc.impl;
 
-import java.sql.SQLException;
 import java.time.Clock;
 import java.util.concurrent.TimeUnit;
 

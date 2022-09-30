@@ -9,34 +9,47 @@
         <version>0.2.0</version>
     </parent>
 
-    <artifactId>rodriguez-jdbc</artifactId>
+    <artifactId>rodriguez-aws-sdk</artifactId>
     <packaging>jar</packaging>
 
-    <name>rodriguez-jdbc</name>
+    <name>rodriguez-aws-sdk</name>
+
+    <properties>
+        <awssdk.version>1.12.312</awssdk.version>
+    </properties>
 
     <dependencies>
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-core</artifactId>
-            <version>0.2.0</version>
+            <version>${project.parent.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.github.jsqlparser</groupId>
-            <artifactId>jsqlparser</artifactId>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-s3</artifactId>
+            <version>${awssdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-sqs</artifactId>
+            <version>${awssdk.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-csv</artifactId>
+            <artifactId>jackson-dataformat-xml</artifactId>
         </dependency>
-
         <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <scope>test</scope>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.failsafe</groupId>
+            <artifactId>failsafe</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

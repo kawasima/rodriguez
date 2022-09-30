@@ -71,6 +71,12 @@ Start HarnessServer before you run tests.
 % docker run -it --rm -p 10200-10210:10200-10210 kawasima/rodriguez
 ```
 
+How to use a configuration file outside the container.
+
+```
+docker run -it --rm -v .:/app/conf -p 10200-10210:10200-10210 kawasima/rodriguez --config=/app/conf/rodriguez.json
+```
+
 ### Native build
 
 ```

@@ -1,9 +1,9 @@
 package net.unit8.rodriguez;
 
-import net.jodah.failsafe.Failsafe;
-import net.jodah.failsafe.RetryPolicy;
-import net.jodah.failsafe.Timeout;
-import net.jodah.failsafe.TimeoutExceededException;
+import dev.failsafe.Failsafe;
+import dev.failsafe.RetryPolicy;
+import dev.failsafe.Timeout;
+import dev.failsafe.TimeoutExceededException;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -20,11 +20,13 @@ import java.time.Duration;
 import java.util.Objects;
 
 public class FailsafeClientTest {
-    RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
-            .withMaxRetries(3);
+    final RetryPolicy<Object> retryPolicy = RetryPolicy.builder()
+            .withMaxRetries(3)
+            .build();
 
-    Timeout<Object> timeout = Timeout.of(Duration.ofSeconds(15))
-            .withCancel(true);
+    final Timeout<Object> timeout = Timeout.builder(Duration.ofSeconds(15))
+            .withInterrupt()
+            .build();
 
     static HarnessServer server;
 
@@ -117,6 +119,7 @@ public class FailsafeClientTest {
                 .run(() -> {
             char[] cbuf = new char[1024];
             Reader reader = Objects.requireNonNull(response.body()).charStream();
+            @SuppressWarnings("MismatchedQueryAndUpdateOfStringBuilder")
             StringBuilder sb = new StringBuilder();
             while(!Thread.interrupted()) {
                 int read = reader.read(cbuf, 0, cbuf.length);
@@ -143,6 +146,7 @@ public class FailsafeClientTest {
         Assertions.assertThatThrownBy(() -> {
             char[] cbuf = new char[1024];
             Reader reader = Objects.requireNonNull(response.body()).charStream();
+            @SuppressWarnings("MismatchedQueryAndUpdateOfStringBuilder")
             StringBuilder sb = new StringBuilder();
             while(true) {
                 int read = reader.read(cbuf, 0, cbuf.length);
