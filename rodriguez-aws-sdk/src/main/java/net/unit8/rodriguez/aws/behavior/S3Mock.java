@@ -33,28 +33,48 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
     public S3Mock() {
         mapper = XmlMapper.builder()
                 .addModule(new JavaTimeModule()
-                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("YYYY-MM-dd'T'hh:mm:ss.s'Z'"))))
+                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'hh:mm:ss.s'Z'"))))
                 .build();
     }
 
-    private Optional<String> getBucketName(HttpExchange exchange) {
+    private String getBucketNameFromPath(HttpExchange exchange) {
+        return Optional.ofNullable(exchange.getRequestURI().getPath())
+                .filter(path -> !path.isEmpty() && !"/".equals(path))
+                .map(path -> path.substring(1))
+                .map(path -> path.contains("/") ? path.substring(0, path.indexOf('/')) : path)
+                .orElseGet(() -> getBucketNameFromHost(exchange));
+    }
+
+    private String getBucketNameFromHost(HttpExchange exchange) {
         return Optional.ofNullable(exchange.getRequestHeaders().getFirst("Host"))
                 .map(host -> {
                     Pattern bucketPattern = Pattern.compile("([a-z\\-]+)\\." + endpointHost);
                     return bucketPattern.matcher(host);
                 })
                 .filter(Matcher::find)
-                .map(m -> m.group(1));
+                .map(m -> m.group(1))
+                .orElse("");
     }
 
     @Override
     public void handle(HttpExchange exchange) {
         try {
             AWSRequest request = AWSRequest.of(exchange);
-            getBucketName(exchange)
-                    .ifPresent(bucketName -> request.getParams().put("BucketName", bucketName));
+            String bucketName = getBucketNameFromPath(exchange);
+            boolean isPathStyleAccess = bucketName != null;
+            if (!isPathStyleAccess) {
+                bucketName = getBucketNameFromHost(exchange);
+            }
 
+            if (!bucketName.isEmpty()) {
+                request.getParams().put("BucketName", bucketName);
+            }
+
+            String bn = bucketName;
             Optional.ofNullable(exchange.getRequestURI().getPath())
+                    .map(path -> bn.isEmpty() ? ""
+                            :
+                            path.startsWith("/" + bn) ? path.substring(bn.length() + 1) : path)
                     .filter(path -> !path.isEmpty() && !path.equals("/"))
                     .map(path -> path.substring(1))
                     .ifPresent(objName -> request.getParams().put("ObjectName", objName));

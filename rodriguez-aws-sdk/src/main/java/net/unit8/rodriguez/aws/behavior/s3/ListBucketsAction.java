@@ -1,8 +1,6 @@
 package net.unit8.rodriguez.aws.behavior.s3;
 
 import net.unit8.rodriguez.aws.AWSRequest;
-import net.unit8.rodriguez.aws.MockAction;
-import net.unit8.rodriguez.aws.RequestParams;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;

@@ -2,7 +2,6 @@ package net.unit8.rodriguez.aws.behavior.sqs;
 
 import net.unit8.rodriguez.aws.AWSRequest;
 import net.unit8.rodriguez.aws.MockAction;
-import net.unit8.rodriguez.aws.RequestParams;
 
 import java.io.Serializable;
 

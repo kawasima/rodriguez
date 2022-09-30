@@ -11,7 +11,7 @@ public class CreateBucketAction extends S3ActionBase<Void> {
         String bucketName = request.getParams().getFirst("BucketName");
         Optional.ofNullable(getS3Directory())
                 .filter(dir -> new File(dir, bucketName).mkdir())
-                .orElse(null);
+                .orElseThrow(() -> new RuntimeException("Fail to create a bucket"));
         return null;
     }
 }

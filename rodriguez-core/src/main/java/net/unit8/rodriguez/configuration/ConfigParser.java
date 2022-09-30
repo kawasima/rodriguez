@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public class ConfigParser {
-    ObjectMapper mapper;
+    final ObjectMapper mapper;
 
     public ConfigParser() {
         this.mapper = new ObjectMapper();

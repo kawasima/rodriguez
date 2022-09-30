@@ -1,7 +1,5 @@
 package net.unit8.rodriguez.aws;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
@@ -26,7 +24,7 @@ class SQSTest {
         sqsClient = AmazonSQSClientBuilder.standard()
                 .withEndpointConfiguration(
                         new AwsClientBuilder.EndpointConfiguration(
-                                "http://localhost:10201",
+                                "http://127.0.0.1:10201",
                                 "nishiogi"
                         )
                 )

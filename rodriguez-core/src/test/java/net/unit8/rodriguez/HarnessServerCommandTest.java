@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class HarnessServerCommandTest {
-    ObjectMapper mapper = new ObjectMapper()
+    final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new Jdk8Module());
 
     @Test
@@ -37,17 +37,19 @@ class HarnessServerCommandTest {
                 .url("http://localhost:10200/config")
                 .get()
                 .build();
-        Response configResponse = client.newCall(configRequest).execute();
-        HarnessConfig config = mapper
-                .readerFor(HarnessConfig.class)
-                .readValue(Objects.requireNonNull(configResponse.body()).byteStream());
-
-        assertThat(config.getPorts()).isEmpty();
+        try (Response configResponse = client.newCall(configRequest).execute()) {
+            HarnessConfig config = mapper
+                    .readerFor(HarnessConfig.class)
+                    .readValue(Objects.requireNonNull(configResponse.body()).byteStream());
+            assertThat(config.getPorts()).isEmpty();
+        }
 
         Request shutdownRequest = new Request.Builder()
                 .url("http://localhost:10200/shutdown")
                 .post(RequestBody.create(new byte[0]))
                 .build();
-        client.newCall(shutdownRequest).execute();
+        try (Response response = client.newCall(shutdownRequest).execute()) {
+            assertThat(response.isSuccessful()).isTrue();
+        }
     }
 }

@@ -16,7 +16,7 @@ public enum SQSAction {
         this.mockAction = mockAction;
     }
 
-    private MockAction<?> mockAction;
+    private final MockAction<?> mockAction;
 
     public <T> T handle(AWSRequest request) {
         return (T) mockAction.handle(request);

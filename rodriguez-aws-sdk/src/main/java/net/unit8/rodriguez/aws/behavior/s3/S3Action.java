@@ -17,7 +17,7 @@ public enum S3Action {
     GetObject(new GetObjectAction(), req -> req.getMethod() == GET),
     DeleteObject(new DeleteObjectAction(), req -> req.getMethod() == DELETE && req.getParams().containsKey("ObjectName")),
     DeleteBucket(new DeleteBucketAction(), req -> req.getMethod() == DELETE),
-    NotFound(params -> { return ErrorResponse.notFound(); }, req -> false)
+    NotFound(params -> ErrorResponse.notFound(), req -> false)
     ;
 
     private final MockAction<?> mockAction;

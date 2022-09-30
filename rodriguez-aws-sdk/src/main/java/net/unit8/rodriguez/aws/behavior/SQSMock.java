@@ -1,6 +1,6 @@
 package net.unit8.rodriguez.aws.behavior;
 
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
@@ -25,9 +25,9 @@ public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
 
     public SQSMock() {
         mapper = XmlMapper.builder()
-                .propertyNamingStrategy(PropertyNamingStrategy.UPPER_CAMEL_CASE)
+                .propertyNamingStrategy(PropertyNamingStrategies.UPPER_CAMEL_CASE)
                 .addModule(new JavaTimeModule()
-                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("YYYY-MM-dd'T'hh:mm:ss.s'Z'"))))
+                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'hh:mm:ss.s'Z'"))))
                 .build();
     }
 
