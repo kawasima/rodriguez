@@ -5,6 +5,6 @@
     "sqs": "node src/sqs.js"
   },
   "dependencies": {
-    "aws-sdk": "^2.716.0"
+    "aws-sdk": "^2.1354.0"
   }
 }
