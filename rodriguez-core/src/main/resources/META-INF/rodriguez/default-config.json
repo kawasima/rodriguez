@@ -26,6 +26,15 @@
     },
     "10208": {
       "type": "net.unit8.rodriguez.behavior.BrokenJson"
+    },
+    "10209": {
+      "type": "net.unit8.rodriguez.behavior.AcceptButSilent"
+    },
+    "10211": {
+      "type": "net.unit8.rodriguez.behavior.OversizedResponse"
+    },
+    "10212": {
+      "type": "net.unit8.rodriguez.behavior.RefuseAuthentication"
     }
   }
 }

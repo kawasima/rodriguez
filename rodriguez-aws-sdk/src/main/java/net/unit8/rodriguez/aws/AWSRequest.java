@@ -46,6 +46,12 @@ public class AWSRequest implements Serializable {
         return params;
     }
 
+    public static AWSRequest of(HttpExchange exchange, RequestParams params) {
+        URI requestURI = exchange.getRequestURI();
+        HttpMethod method = HttpMethod.valueOf(exchange.getRequestMethod());
+        return new AWSRequest(method, requestURI, exchange.getRequestBody(), params);
+    }
+
     public static AWSRequest of(HttpExchange exchange) {
         URI requestURI = exchange.getRequestURI();
         HttpMethod method = HttpMethod.valueOf(exchange.getRequestMethod());

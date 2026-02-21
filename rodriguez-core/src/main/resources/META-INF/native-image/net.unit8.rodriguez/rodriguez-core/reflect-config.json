@@ -61,5 +61,20 @@
     "name": "net.unit8.rodriguez.behavior.SlowResponse",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
+  },
+  {
+    "name": "net.unit8.rodriguez.behavior.AcceptButSilent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "net.unit8.rodriguez.behavior.OversizedResponse",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "net.unit8.rodriguez.behavior.RefuseAuthentication",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
   }
 ]

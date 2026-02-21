@@ -6,17 +6,20 @@ A test harness tool that adhere to the "Release It!".
 
 - [X] It can be refused.
 - [X] It can sit in a listen queue until the caller times out.
-- [ ] The remote end can reply with a SYN/ACK and then never send any data.
+- [X] The remote end can reply with a SYN/ACK and then never send any data.
 - [X] The remote end can send nothing but RESET packets.
 - [X] The remote end can report a full receive window and never drain the data.
-- [ ] The connection can be established, but the remote end never sends a byte of data.
-- [ ] The connection can be established, but packets could be lost causing retransmit delays.
-- [ ] The connection can be established, but the remote end never acknowledges receiving a packet, causing endless retransmits.
+- [X] The connection can be established, but the remote end never sends a byte of data.
+- [ ] The connection can be established, but packets could be lost causing retransmit delays. (*)
+- [ ] The connection can be established, but the remote end never acknowledges receiving a packet, causing endless retransmits. (*)
 - [X] The service can accept a request, send response headers (supposing HTTP), and never send the response body.
 - [X] The service can send one byte of the response every thirty seconds.
 - [X] The service can send a response of HTML instead of the expected XML.
-- [ ] The service can send megabytes when kilobytes are expected.
-- [ ] The service can refuse all authentication credentials.
+- [X] The service can send megabytes when kilobytes are expected.
+- [X] The service can refuse all authentication credentials.
+
+(*) These patterns cannot be simulated at the Java socket level because they involve TCP/IP kernel-level behavior.
+Consider using [toxiproxy](https://github.com/Shopify/toxiproxy) or Linux traffic control (`tc netem`) for these scenarios.
 
 ## Multiple port support
 
@@ -68,13 +71,13 @@ Start HarnessServer before you run tests.
 
 ```
 % docker pull kawasima/rodriguez
-% docker run -it --rm -p 10200-10210:10200-10210 kawasima/rodriguez
+% docker run -it --rm -p 10200-10212:10200-10212 kawasima/rodriguez
 ```
 
 How to use a configuration file outside the container.
 
 ```
-docker run -it --rm -v .:/app/conf -p 10200-10210:10200-10210 kawasima/rodriguez --config=/app/conf/rodriguez.json
+docker run -it --rm -v .:/app/conf -p 10200-10212:10200-10212 kawasima/rodriguez --config=/app/conf/rodriguez.json
 ```
 
 ### Native build
@@ -120,6 +123,15 @@ docker run -it --rm -v .:/app/conf -p 10200-10210:10200-10210 kawasima/rodriguez
     },
     "10208": {
       "type": "net.unit8.rodriguez.behavior.BrokenJson"
+    },
+    "10209": {
+      "type": "net.unit8.rodriguez.behavior.AcceptButSilent"
+    },
+    "10211": {
+      "type": "net.unit8.rodriguez.behavior.OversizedResponse"
+    },
+    "10212": {
+      "type": "net.unit8.rodriguez.behavior.RefuseAuthentication"
     }
   },
   "controlPort": 10200
@@ -172,6 +184,14 @@ Default port: 10204
 
 TCP connection can be established but the remote end doesn't read the packet.
 
+### AcceptButSilent
+
+Default port: 10209
+
+TCP connection is established and the server reads the request, but never sends any response data.
+This simulates a service that completes the TCP handshake and accepts the connection,
+but remains completely silent from the client's perspective.
+
 ### ResponseHeaderOnly (HTTP)
 
 Default port: 10207
@@ -183,6 +203,34 @@ The HTTP Request can be accepted and the server response headers, but never send
 Default port: 10205
 
 The HTTP Request can be accepted and the server response successfully, but very slowly.
+
+### OversizedResponse (HTTP)
+
+Default port: 10211
+
+The HTTP request is accepted and the server sends a response with an unexpectedly large body.
+This simulates a service that sends megabytes when kilobytes are expected.
+
+| property | description | default |
+| --- | --- | --- |
+| responseSize | The total size of the response body in bytes | 10485760 (10 MB) |
+| contentType | The Content-Type header value | application/octet-stream |
+| chunkSize | The size of each write chunk in bytes | 8192 |
+
+### RefuseAuthentication (HTTP)
+
+Default port: 10212
+
+The HTTP request is accepted but the server always refuses authentication,
+returning a 401 Unauthorized response with a WWW-Authenticate header.
+
+| property | description | default |
+| --- | --- | --- |
+| responseStatus | The HTTP status code | 401 |
+| wwwAuthenticate | The WWW-Authenticate header value | Bearer realm="rodriguez" |
+| responseBody | The response body | {"error":"unauthorized","message":"Authentication credentials were refused"} |
+| contentType | The Content-Type header value | application/json |
+| delay | Delay before responding in milliseconds | 0 |
 
 ### MockDatabase (JDBC)
 

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "net.unit8.rodriguez.aws.behavior.S3Mock",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "net.unit8.rodriguez.aws.behavior.SQSMock",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  }
+]

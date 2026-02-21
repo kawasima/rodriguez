@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.io.Reader;
 import java.net.ConnectException;
 import java.net.SocketException;
@@ -21,10 +22,10 @@ import java.util.Objects;
 
 public class FailsafeClientTest {
     final RetryPolicy<Object> retryPolicy = RetryPolicy.builder()
-            .withMaxRetries(3)
+            .withMaxRetries(1)
             .build();
 
-    final Timeout<Object> timeout = Timeout.builder(Duration.ofSeconds(15))
+    final Timeout<Object> timeout = Timeout.builder(Duration.ofSeconds(5))
             .withInterrupt()
             .build();
 
@@ -46,8 +47,8 @@ public class FailsafeClientTest {
     @Test
     void connectionRefused() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
-                .readTimeout(Duration.ofMillis(3000))
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10201/")
@@ -60,8 +61,8 @@ public class FailsafeClientTest {
     @Test
     void notAccept() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
-                .readTimeout(Duration.ofMillis(3000))
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10202/")
@@ -74,7 +75,7 @@ public class FailsafeClientTest {
     @Test
     void rstPacket() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
+                .connectTimeout(Duration.ofMillis(500))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10203/")
@@ -90,8 +91,8 @@ public class FailsafeClientTest {
     @Test
     void neverDrain() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
-                .readTimeout(Duration.ofMillis(3000))
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10204/")
@@ -106,8 +107,8 @@ public class FailsafeClientTest {
     @Test
     void slowResponse() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
-                .readTimeout(Duration.ofMillis(3000))
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(10000))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10205/")
@@ -134,8 +135,8 @@ public class FailsafeClientTest {
     @Test
     void responseHeaderOnly() {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(Duration.ofMillis(1000))
-                .readTimeout(Duration.ofMillis(3000))
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
                 .build();
         Request request = new Request.Builder()
                 .url("http://localhost:10207/")
@@ -156,5 +157,58 @@ public class FailsafeClientTest {
         }).isInstanceOf(SocketTimeoutException.class);
     }
 
+    /**
+     * TCP connection is established and request is read, but no response is ever sent.
+     */
+    @Test
+    void acceptButSilent() {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10209/")
+                .get()
+                .build();
+        Assertions.assertThatThrownBy(() -> Failsafe.with(timeout, retryPolicy)
+                .get(() -> client.newCall(request).execute())).hasCauseInstanceOf(SocketTimeoutException.class);
+    }
 
+    /**
+     * The service sends megabytes when kilobytes are expected.
+     */
+    @Test
+    void oversizedResponse() throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(10000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10211/")
+                .get()
+                .build();
+        Response response = client.newCall(request).execute();
+        Assertions.assertThat(response.code()).isEqualTo(200);
+        byte[] body = Objects.requireNonNull(response.body()).bytes();
+        Assertions.assertThat(body.length).isEqualTo(10_485_760);
+    }
+
+    /**
+     * The service refuses all authentication credentials.
+     */
+    @Test
+    void refuseAuthentication() throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10212/")
+                .get()
+                .build();
+        Response response = client.newCall(request).execute();
+        Assertions.assertThat(response.code()).isEqualTo(401);
+        Assertions.assertThat(response.header("WWW-Authenticate"))
+                .isEqualTo("Bearer realm=\"rodriguez\"");
+    }
 }
