@@ -47,8 +47,8 @@ public class HarnessServer {
     }
 
     public Runnable createServer(InstabilityBehavior behavior, int port) {
-        if (behavior instanceof MetricsAvailable) {
-            ((MetricsAvailable) behavior).setMetricRegistry(metricRegistry);
+        if (behavior instanceof MetricsAvailable available) {
+            available.setMetricRegistry(metricRegistry);
         }
         if (behavior.canListen()) {
             return behavior.createServer(executor, port);

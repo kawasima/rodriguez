@@ -36,8 +36,8 @@ public enum S3Action {
     }
 
     public void setDirectory(File directory) {
-        if (mockAction instanceof S3ActionBase) {
-            ((S3ActionBase<?>) mockAction).setS3Directory(directory);
+        if (mockAction instanceof S3ActionBase<?> base) {
+            base.setS3Directory(directory);
         }
     }
 }

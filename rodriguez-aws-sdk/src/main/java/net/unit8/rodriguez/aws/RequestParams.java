@@ -18,7 +18,7 @@ public class RequestParams {
 
     public String getFirst(String key) {
         return Optional.ofNullable(params.get(key))
-                .map(list -> list.get(0))
+                .map(list -> list.getFirst())
                 .orElse(null);
     }
 

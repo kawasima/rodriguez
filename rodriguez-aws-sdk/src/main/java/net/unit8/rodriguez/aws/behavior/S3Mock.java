@@ -85,13 +85,12 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
                     .orElse(S3Action.NotFound);
 
             Object response = action.handle(request);
-            if (response instanceof ErrorResponse) {
-                ((ErrorResponse) response).handle(exchange);
+            if (response instanceof ErrorResponse errorResponse) {
+                errorResponse.handle(exchange);
             } else if (response == null) {
                 exchange.getResponseHeaders().set("Content-Length", "0");
                 exchange.sendResponseHeaders(204, -1);
-            } else if (response instanceof File) {
-                File f = (File) response;
+            } else if (response instanceof File f) {
                 exchange.sendResponseHeaders(200, f.length());
                 byte[] buffer = new byte[4096];
                 try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f))) {

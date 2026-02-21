@@ -5,7 +5,7 @@ import net.unit8.rodriguez.aws.AWSRequest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Optional;
 
 public class PutObjectAction extends S3ActionBase<Void> {
@@ -14,7 +14,7 @@ public class PutObjectAction extends S3ActionBase<Void> {
         String bucketName = request.getParams().getFirst("BucketName");
         String objectName = request.getParams().getFirst("ObjectName");
         Optional.ofNullable(getS3Directory())
-                .map(dir -> Paths.get(dir.getPath(), bucketName, objectName))
+                .map(dir -> Path.of(dir.getPath(), bucketName, objectName))
                 .ifPresentOrElse(path -> {
                     try {
                         Files.write(path, request.getBody().readAllBytes());
