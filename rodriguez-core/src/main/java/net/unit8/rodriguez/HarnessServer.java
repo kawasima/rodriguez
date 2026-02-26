@@ -9,6 +9,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -24,6 +25,7 @@ public class HarnessServer {
     private List<Runnable> servers;
     private ControlServer controlServer;
     private ExecutorService executor;
+    private FuseSupport fuseSupport;
 
     public HarnessServer() {
         ConfigParser parser = new ConfigParser();
@@ -69,6 +71,15 @@ public class HarnessServer {
                 .stream()
                 .map(entry -> createServer(entry.getValue(), entry.getKey()))
                 .collect(Collectors.toList());
+
+        if (config.getFuse() != null) {
+            ServiceLoader.load(FuseSupport.class).findFirst().ifPresent(fs -> {
+                fs.start(config.getFuse());
+                fuseSupport = fs;
+                LOG.info("FUSE support enabled");
+            });
+        }
+
         LOG.info("rodriguez server has started");
     }
 
@@ -98,6 +109,9 @@ public class HarnessServer {
                 servers.forEach(Runnable::run);
             }
 
+            if (fuseSupport != null) {
+                fuseSupport.shutdown();
+            }
             if (controlServer != null) {
                 controlServer.shutdown();
             }

@@ -15,7 +15,7 @@
     <name>rodriguez-aws-sdk</name>
 
     <properties>
-        <awssdk.version>1.12.780</awssdk.version>
+        <awssdk.version>1.12.797</awssdk.version>
     </properties>
 
     <dependencies>

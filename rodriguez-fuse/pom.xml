@@ -1,0 +1,30 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>net.unit8.rodriguez</groupId>
+        <artifactId>rodriguez-parent</artifactId>
+        <version>0.3.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>rodriguez-fuse</artifactId>
+    <packaging>jar</packaging>
+
+    <name>rodriguez-fuse</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>net.unit8.rodriguez</groupId>
+            <artifactId>rodriguez-core</artifactId>
+            <version>${project.parent.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.serceman</groupId>
+            <artifactId>jnr-fuse</artifactId>
+            <version>0.5.8</version>
+        </dependency>
+    </dependencies>
+
+</project>

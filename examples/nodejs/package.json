@@ -2,7 +2,8 @@
   "name": "rodriguez-node-example",
   "private": true,
   "scripts": {
-    "sqs": "node src/sqs.js"
+    "sqs": "node src/sqs.js",
+    "fuse": "node src/fuse.js"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.750.0"
