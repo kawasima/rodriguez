@@ -98,19 +98,44 @@ S3Mock/SQSMock use enum-based action routing (`S3Action`/`SQSAction`) with `Mock
 - JSON configuration with Jackson (polymorphic types via `@JsonTypeInfo`)
 - Logging via `java.util.logging`
 
-## Version Bump Procedure
+## Release Procedure
 
-When bumping the project version, update `0.X.0` → `0.Y.0` in all of the following locations:
+Inter-module dependencies use `${project.version}`, so `versions:set` handles everything.
 
-1. **Parent POM** — `pom.xml` (`<version>`)
-2. **Child module parent references** — `rodriguez-core/pom.xml`, `rodriguez-jdbc/pom.xml`, `rodriguez-aws-sdk/pom.xml`, `rodriguez-fuse/pom.xml`, `rodriguez-build/pom.xml` (each `<parent><version>`)
-3. **Explicit dependency versions in rodriguez-jdbc** — `rodriguez-jdbc/pom.xml` (`rodriguez-core` dependency)
-4. **Explicit dependency versions in rodriguez-build** — `rodriguez-build/pom.xml` (`rodriguez-core`, `rodriguez-jdbc`, `rodriguez-aws-sdk`, `rodriguez-fuse` dependencies)
-
-All occurrences of the old version string in `**/pom.xml` must be replaced. Verify with:
+### Release (e.g. 0.4.0)
 
 ```bash
-grep -r "0\.OLD\.0" --include="pom.xml"
+# 1. Set release version (removes -SNAPSHOT)
+mvn versions:set -DnewVersion=0.4.0 -DgenerateBackupPoms=false
+
+# 2. Verify
+mvn clean test
+
+# 3. Commit, merge to master, tag
+git add -A && git commit -m "Release v0.4.0"
+git checkout master && git merge develop
+git tag v0.4.0
+
+# 4. Build and push Docker image
+mvn jib:dockerBuild -pl rodriguez-build
+# → kawasima/rodriguez:latest + kawasima/rodriguez:0.4.0
+
+# 5. Push
+git push origin master --tags
 ```
 
-After updating, run `mvn clean compile` to verify the build succeeds.
+### Start next development cycle
+
+```bash
+git checkout develop
+
+# 1. Set next SNAPSHOT version (0.4.0 → 0.4.1-SNAPSHOT)
+mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
+
+# Or specify explicitly for a minor/major bump (0.4.0 → 0.5.0-SNAPSHOT)
+mvn versions:set -DnewVersion=0.5.0-SNAPSHOT -DgenerateBackupPoms=false
+
+# 2. Commit
+git add -A && git commit -m "Bump version to X.Y.Z-SNAPSHOT"
+git push origin develop
+```

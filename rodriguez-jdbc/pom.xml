@@ -6,7 +6,7 @@
     <parent>
         <groupId>net.unit8.rodriguez</groupId>
         <artifactId>rodriguez-parent</artifactId>
-        <version>0.4.0</version>
+        <version>0.4.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>rodriguez-jdbc</artifactId>
@@ -18,7 +18,7 @@
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-core</artifactId>
-            <version>0.4.0</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.jsqlparser</groupId>

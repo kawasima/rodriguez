@@ -5,7 +5,7 @@
     <parent>
         <groupId>net.unit8.rodriguez</groupId>
         <artifactId>rodriguez-parent</artifactId>
-        <version>0.4.0</version>
+        <version>0.4.1-SNAPSHOT</version>
     </parent>
 
     <artifactId>rodriguez-build</artifactId>
@@ -52,22 +52,22 @@
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-core</artifactId>
-            <version>0.4.0</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-jdbc</artifactId>
-            <version>0.4.0</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-aws-sdk</artifactId>
-            <version>0.4.0</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-fuse</artifactId>
-            <version>0.4.0</version>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
