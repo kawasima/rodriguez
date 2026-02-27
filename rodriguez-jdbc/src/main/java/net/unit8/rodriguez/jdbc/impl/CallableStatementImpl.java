@@ -68,6 +68,7 @@ public class CallableStatementImpl extends StatementImpl implements CallableStat
         return 0;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public BigDecimal getBigDecimal(int i, int i1) throws SQLException {
         return null;
@@ -663,6 +664,7 @@ public class CallableStatementImpl extends StatementImpl implements CallableStat
 
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void setUnicodeStream(int i, InputStream inputStream, int i1) throws SQLException {
 

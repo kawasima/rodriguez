@@ -138,6 +138,7 @@ public class ResultSetImpl implements ResultSet {
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public InputStream getUnicodeStream(int columnIndex) throws SQLException {
         return null;

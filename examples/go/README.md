@@ -1,70 +1,70 @@
 # Rodriguez Go Example
 
-Go アプリケーションに対する rodriguez の障害注入テスト例。
-`go test` を使い、AWS SDK for Go v2 の各障害パターンに対するタイムアウト挙動を検証する。
+Fault injection test examples for Go applications using Rodriguez.
+Uses `go test` to verify AWS SDK for Go v2 timeout behavior under various fault patterns.
 
-## 前提条件
+## Prerequisites
 
 - Go 1.21+
-- rodriguez が起動済み（Docker Compose 推奨）
+- Rodriguez running (Docker Compose recommended)
 
 ```bash
-# リポジトリルートで
+# From the repository root
 docker compose up -d
 ```
 
-## セットアップ
+## Setup
 
 ```bash
 cd examples/go
 go mod download
 ```
 
-## テスト実行
+## Run Tests
 
 ```bash
 go test -v -count=1 -timeout 120s ./...
 ```
 
-## テスト構成
+## Test Structure
 
-### 1. S3 テスト (`s3_test.go`)
+### 1. S3 Tests (`s3_test.go`)
 
-AWS SDK for Go v2 (`github.com/aws/aws-sdk-go-v2/service/s3`) を使った S3 Mock の正常系テストと、タイムアウト問題のデモ。
+Normal operations and timeout pitfall demos using AWS SDK for Go v2 (`github.com/aws/aws-sdk-go-v2/service/s3`).
 
-**正常系（port 10213）:** CreateBucket, PutObject, ListBuckets, ListObjects, GetObject, DeleteObject, DeleteBucket
+**Normal operations (port 10213):** CreateBucket, PutObject, ListBuckets, ListObjects, GetObject, DeleteObject, DeleteBucket
 
-**障害注入テスト:**
+**Fault injection tests:**
 
-| テスト名 | ポート | 内容 |
-| --------- | -------- | ------ |
-| DefaultHangs | 10209 (AcceptButSilent) | デフォルト設定はタイムアウトなし。3s の context で検出 |
-| FixWithContextTimeout | 10209 (AcceptButSilent) | `context.WithTimeout` で ~1s でタイムアウト |
-| FixWithHttpClientTimeout | 10209 (AcceptButSilent) | `http.Client.Timeout` で ~1s でタイムアウト |
-| DefaultHangs | 10205 (SlowResponse) | GetObject 成功後、ボディ読み取りでハング |
-| ResponseHeaderTimeoutDoesNotCoverBody | 10205 (SlowResponse) | `ResponseHeaderTimeout` はヘッダ到着で満たされ、ボディ読み取りをカバーしない |
-| FixWithHttpClientTimeout | 10205 (SlowResponse) | `http.Client.Timeout` はボディ読み取りもカバー |
-| DefaultHangs | 10207 (ResponseHeaderOnly) | 不完全ボディでハング |
+| Test Name | Port | Description |
+| --- | --- | --- |
+| DefaultHangs | 10209 (AcceptButSilent) | Default has no timeout; detected with 3s context |
+| FixWithContextTimeout | 10209 (AcceptButSilent) | `context.WithTimeout` times out in ~1s |
+| FixWithHttpClientTimeout | 10209 (AcceptButSilent) | `http.Client.Timeout` times out in ~1s |
+| DefaultHangs | 10205 (SlowResponse) | GetObject succeeds, body read hangs |
+| ResponseHeaderTimeoutDoesNotCoverBody | 10205 (SlowResponse) | `ResponseHeaderTimeout` is satisfied by headers; doesn't cover body reads |
+| FixWithHttpClientTimeout | 10205 (SlowResponse) | `http.Client.Timeout` covers body reads |
+| DefaultHangs | 10207 (ResponseHeaderOnly) | Incomplete body hangs |
 
-### 2. SQS テスト (`sqs_test.go`)
+### 2. SQS Tests (`sqs_test.go`)
 
-AWS SDK for Go v2 (`github.com/aws/aws-sdk-go-v2/service/sqs`) を使った SQS Mock の正常系テストと、タイムアウト問題のデモ。
+Normal operations and timeout pitfall demos using AWS SDK for Go v2 (`github.com/aws/aws-sdk-go-v2/service/sqs`).
 
-**正常系（port 10214）:** CreateQueue, GetQueueUrl, SendMessage, ReceiveMessage, DeleteMessage, DeleteQueue
+**Normal operations (port 10214):** CreateQueue, GetQueueUrl, SendMessage, ReceiveMessage, DeleteMessage, DeleteQueue
 
-**障害注入テスト:**
+**Fault injection tests:**
 
-| テスト名 | ポート | 内容 |
-| --------- | -------- | ------ |
-| DefaultHangs | 10209 (AcceptButSilent) | デフォルト設定はタイムアウトなし |
-| FixWithContextTimeout | 10209 (AcceptButSilent) | `context.WithTimeout` で ~1s でタイムアウト |
-| FixWithHttpClientTimeout | 10209 (AcceptButSilent) | `http.Client.Timeout` で ~1s でタイムアウト |
-| DefaultHangs | 10205 (SlowResponse) | デフォルト設定はタイムアウトなし |
-| ResponseHeaderTimeoutDoesNotCoverBody | 10205 (SlowResponse) | `ResponseHeaderTimeout` はボディ読み取りをカバーしない |
-| FixWithHttpClientTimeout | 10205 (SlowResponse) | `http.Client.Timeout` はボディ読み取りもカバー |
+| Test Name | Port | Description |
+| --- | --- | --- |
+| DefaultHangs | 10209 (AcceptButSilent) | Default has no timeout |
+| FixWithContextTimeout | 10209 (AcceptButSilent) | `context.WithTimeout` times out in ~1s |
+| FixWithHttpClientTimeout | 10209 (AcceptButSilent) | `http.Client.Timeout` times out in ~1s |
+| DefaultHangs | 10205 (SlowResponse) | Default has no timeout |
+| ResponseHeaderTimeoutDoesNotCoverBody | 10205 (SlowResponse) | `ResponseHeaderTimeout` doesn't cover body reads |
+| FixWithHttpClientTimeout | 10205 (SlowResponse) | `http.Client.Timeout` covers body reads |
 
-### 3. FUSE テスト (`main.go`)
+### 3. FUSE Tests (`main.go`)
 
-ファイル I/O 障害注入の例（別途 FUSE 設定が必要）。
+File I/O fault injection example (requires separate FUSE configuration).
 
-AWS SDK タイムアウトの落とし穴の詳細と言語間比較は [examples/README.md](../README.md) を参照。
+See [examples/README.md](../README.md) for detailed AWS SDK timeout pitfalls and cross-language comparison.

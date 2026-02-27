@@ -41,7 +41,7 @@ class HarnessServerCommandTest {
             HarnessConfig config = mapper
                     .readerFor(HarnessConfig.class)
                     .readValue(Objects.requireNonNull(configResponse.body()).byteStream());
-            assertThat(config.getPorts()).isEmpty();
+            assertThat(config.getControlPort()).isPresent().hasValue(10200);
         }
 
         Request shutdownRequest = new Request.Builder()

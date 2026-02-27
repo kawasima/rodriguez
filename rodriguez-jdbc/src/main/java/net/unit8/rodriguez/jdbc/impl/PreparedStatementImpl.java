@@ -125,6 +125,7 @@ public class PreparedStatementImpl extends StatementImpl implements PreparedStat
 
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void setUnicodeStream(int i, InputStream inputStream, int i1) throws SQLException {
 

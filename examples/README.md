@@ -1,51 +1,51 @@
 # Rodriguez Examples
 
-rodriguez を使った障害注入テストの各言語サンプル集。
-各言語の AWS SDK がデフォルトでどのようなタイムアウト挙動をするかを、実際のテストで実証する。
+A collection of multi-language fault injection test examples using Rodriguez.
+Each language demonstrates how AWS SDKs behave under various timeout scenarios with real tests.
 
-## 言語別サンプル
+## Language Examples
 
-| ディレクトリ | 言語 | テストフレームワーク | AWS SDK | テスト数 |
+| Directory | Language | Test Framework | AWS SDK | Tests |
 | --- | --- | --- | --- | --- |
 | [nodejs/](nodejs/) | Node.js 18+ | vitest | AWS SDK v3 (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`) | 32 |
 | [go/](go/) | Go 1.21+ | `go test` | AWS SDK for Go v2 (`aws-sdk-go-v2`) | 27 |
 | [php/](php/) | PHP 8.1+ | PHPUnit | AWS SDK for PHP (`aws/aws-sdk-php` + Guzzle/cURL) | 33 |
 
-## 起動方法
+## Getting Started
 
 ```bash
-# リポジトリルートで rodriguez を起動
+# Start Rodriguez from the repository root
 docker compose up -d
 
-# 各言語のテストを実行
+# Run tests for each language
 cd examples/nodejs && npm install && npm test
 cd examples/go && go test -v -count=1 -timeout 120s ./...
 cd examples/php && composer install && vendor/bin/phpunit --testdox
 ```
 
-## AWS SDK タイムアウトの落とし穴: 言語間比較
+## AWS SDK Timeout Pitfalls: Cross-Language Comparison
 
-3 つの AWS SDK で共通の障害パターン（AcceptButSilent, SlowResponse, ResponseHeaderOnly）に対するタイムアウト挙動を検証した結果をまとめる。
+We tested three AWS SDKs against the same fault patterns (AcceptButSilent, SlowResponse, ResponseHeaderOnly) and summarized the timeout behavior differences.
 
-### 共通の落とし穴: デフォルトタイムアウトが無限
+### Common Pitfall: Default Timeout Is Infinite
 
-**全 3 言語の AWS SDK で、デフォルトのタイムアウトは「なし」（0 または未設定）。**
+**All three AWS SDKs default to no timeout (0 or unset).**
 
-サーバーが応答しない場合、リクエストは永遠にハングする。これは AWS SDK の問題というよりも、各言語の HTTP クライアントライブラリのデフォルト値に起因する。
+If the server never responds, the request hangs forever. This is not an AWS SDK bug but rather the default behavior of each language's HTTP client library.
 
-| 言語 | HTTP クライアント | デフォルトタイムアウト |
-| ------ | ------------------ | --------------------- |
+| Language | HTTP Client | Default Timeout |
+| --- | --- | --- |
 | Node.js | `NodeHttpHandler` (node:http) | `DEFAULT_REQUEST_TIMEOUT = 0` |
 | Go | `http.DefaultClient` | `Timeout = 0` |
 | PHP | Guzzle (cURL) | `timeout = 0` |
 
-### Node.js 固有の落とし穴
+### Node.js-Specific Pitfalls
 
-Node.js SDK v3 には、他の言語にはない **2 つの追加の落とし穴** がある。
+Node.js SDK v3 has **two additional pitfalls** not found in other languages.
 
-#### 落とし穴 A: `requestTimeout` を設定しても throw しない
+#### Pitfall A: Setting `requestTimeout` Does Not Throw
 
-`NodeHttpHandler` に `requestTimeout` を渡しても、デフォルトでは **Warning ログを出すだけ**でリクエストは中断されない。
+When `requestTimeout` is passed to `NodeHttpHandler`, it only **logs a warning** by default — the request is not aborted.
 
 ```
 @smithy/node-http-handler - [WARN] a request has exceeded the configured 1000 ms
@@ -53,38 +53,38 @@ requestTimeout. Init client requestHandler with throwOnRequestTimeout=true to tu
 this into an error.
 ```
 
-**`throwOnRequestTimeout: true` を明示的に設定しないとエラーにならない。**
+**You must explicitly set `throwOnRequestTimeout: true` to get an error.**
 
 ```js
-// Bad: タイムアウトしても Warning だけ出て処理が続行
+// Bad: timeout only produces a warning, request continues
 new NodeHttpHandler({ requestTimeout: 5000 })
 
-// Good: タイムアウト時にエラーを throw
+// Good: timeout throws an error
 new NodeHttpHandler({ requestTimeout: 5000, throwOnRequestTimeout: true })
 ```
 
-Go と PHP にはこの問題は存在しない。タイムアウトを設定すれば必ずエラーになる。
+Go and PHP do not have this issue. Setting a timeout always produces an error.
 
-#### 落とし穴 B: `requestTimeout` はレスポンスボディの読み取りをカバーしない
+#### Pitfall B: `requestTimeout` Does Not Cover Response Body Reads
 
-`requestTimeout` は「レスポンスヘッダが届くまでの時間」を制御する。
-ヘッダが即座に返り、ボディが遅い（または来ない）場合、タイマーは満たされてしまう。
+`requestTimeout` only controls "time until response headers arrive."
+If headers arrive immediately but the body is slow (or never comes), the timer is already satisfied.
 
-- **SlowResponse**: HTTP 200 + ヘッダを即座に返し、ボディを 1 byte/秒で送信
-- **ResponseHeaderOnly**: HTTP 200 + ヘッダ + 1 byte を返し、以降は無応答
+- **SlowResponse**: Returns HTTP 200 + headers immediately, then sends body at 1 byte/sec
+- **ResponseHeaderOnly**: Returns HTTP 200 + headers + 1 byte, then goes silent
 
 ```
 SQS + SlowResponse: requestTimeout + throwOnRequestTimeout still hangs on slow body
 S3  + SlowResponse: send() succeeds but body read hangs — requestTimeout does NOT cover this
 ```
 
-**対策: `AbortSignal.timeout()` や `Promise.race` によるアプリケーションレベルのタイムアウトが必要。**
+**Workaround: Use `AbortSignal.timeout()` or `Promise.race` for application-level timeouts.**
 
 ```js
-// send() に AbortSignal を渡す
+// Pass AbortSignal to send()
 await client.send(command, { abortSignal: AbortSignal.timeout(5000) });
 
-// S3 GetObject のボディ読み取りに Promise.race を使う
+// Use Promise.race for S3 GetObject body reads
 const result = await client.send(new GetObjectCommand({ Bucket, Key }));
 const body = await Promise.race([
   result.Body.transformToString(),
@@ -93,75 +93,75 @@ const body = await Promise.race([
 ]);
 ```
 
-### Go 固有の特性
+### Go-Specific Characteristics
 
-Go の `http.Transport.ResponseHeaderTimeout` は Node.js の `requestTimeout` と同様に「ヘッダが届くまでの時間」しかカバーしない。ただし、Go には **`http.Client.Timeout`** と **`context.WithTimeout`** という 2 つの全ライフサイクルタイムアウトがあり、どちらもボディ読み取りまでカバーする。
+Go's `http.Transport.ResponseHeaderTimeout` only covers "time until headers arrive," similar to Node.js's `requestTimeout`. However, Go provides **`http.Client.Timeout`** and **`context.WithTimeout`**, both of which cover the full request lifecycle including body reads.
 
 ```go
-// 方法 A: リクエスト単位のタイムアウト（推奨）
+// Option A: Per-request timeout (recommended)
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 result, err := client.GetObject(ctx, input)
 
-// 方法 B: クライアント全体のタイムアウト
+// Option B: Client-wide timeout
 httpClient := &http.Client{Timeout: 30 * time.Second}
 ```
 
-### PHP 固有の特性
+### PHP-Specific Characteristics
 
-PHP (Guzzle) の `timeout` は cURL の `CURLOPT_TIMEOUT` にマッピングされ、**転送全体**をカバーする。`timeout` の一つの設定だけで全てのケースに対応できる。Node.js のような「ヘッダ到着後のボディ読み取りはカバーしない」という落とし穴は存在しない。
+PHP (Guzzle)'s `timeout` maps to cURL's `CURLOPT_TIMEOUT`, which covers the **entire transfer**. A single `timeout` setting handles all cases. The Node.js pitfall of "body reads not covered after headers arrive" does not exist in PHP.
 
 ```php
 $client = new S3Client([
     'http' => [
-        'timeout'         => 30,   // 転送全体のタイムアウト（秒）
-        'connect_timeout' => 5,    // 接続確立のタイムアウト（秒）
+        'timeout'         => 30,   // Covers entire transfer (seconds)
+        'connect_timeout' => 5,    // Connection establishment timeout (seconds)
     ],
 ]);
 ```
 
-### 障害パターン別の挙動比較
+### Behavior Comparison by Fault Pattern
 
-#### 無応答（AcceptButSilent）— サーバーが接続を受け入れるが一切応答しない
+#### No Response (AcceptButSilent) — Server accepts connection but never responds
 
-| 設定 | Node.js | Go | PHP |
-| ------ | --------- | ----- | ----- |
-| デフォルト | ハング | ハング | ハング |
-| `requestTimeout` / `ResponseHeaderTimeout` のみ | Warning のみ | ハング | — |
-| `requestTimeout` + `throwOnRequestTimeout` | **タイムアウト** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **タイムアウト** | **タイムアウト** |
-| `AbortSignal` / `context.WithTimeout` | **タイムアウト** | **タイムアウト** | — |
+| Setting | Node.js | Go | PHP |
+| --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs |
+| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs | — |
+| `requestTimeout` + `throwOnRequestTimeout` | **Timeout** | — | — |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
+| `AbortSignal` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
 
-#### 遅いボディ（SlowResponse）— ヘッダは即座に返し、ボディを 1 byte/秒で送信
+#### Slow Body (SlowResponse) — Headers arrive immediately, body sent at 1 byte/sec
 
-| 設定 | Node.js | Go | PHP |
-| ------ | --------- | ----- | ----- |
-| デフォルト | ハング | ハング | ハング |
-| `requestTimeout` / `ResponseHeaderTimeout` のみ | Warning のみ | ハング（ヘッダは届く） | — |
-| `requestTimeout` + `throwOnRequestTimeout` | **ハング（ヘッダは届く）** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **タイムアウト** | **タイムアウト** |
-| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **タイムアウト** | **タイムアウト** | — |
+| Setting | Node.js | Go | PHP |
+| --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs |
+| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs (headers arrived) | — |
+| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
+| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
 
-#### 不完全ボディ（ResponseHeaderOnly）— ヘッダ + 1 byte を返し、以降は無応答
+#### Incomplete Body (ResponseHeaderOnly) — Headers + 1 byte, then silence
 
-| 設定 | Node.js | Go | PHP |
-| ------ | --------- | ----- | ----- |
-| デフォルト | ハング | ハング | ハング |
-| `requestTimeout` + `throwOnRequestTimeout` | **ハング（ヘッダは届く）** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **タイムアウト** | **タイムアウト** |
-| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **タイムアウト** | **タイムアウト** | — |
+| Setting | Node.js | Go | PHP |
+| --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs |
+| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
+| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
 
-### 落とし穴の数の比較
+### Pitfall Count Comparison
 
-| 落とし穴 | Node.js | Go | PHP |
-| --------- | --------- | ----- | ----- |
-| デフォルトタイムアウトが無限 | あり | あり | あり |
-| タイムアウト設定しても throw しない | **あり** | なし | なし |
-| ヘッダ用タイムアウトがボディをカバーしない | **あり** | あり | なし |
-| メインの timeout がボディをカバー | **しない** | する | する |
-| **落とし穴の合計** | **3** | **2** | **1** |
+| Pitfall | Node.js | Go | PHP |
+| --- | --- | --- | --- |
+| Default timeout is infinite | Yes | Yes | Yes |
+| Timeout setting doesn't throw | **Yes** | No | No |
+| Header timeout doesn't cover body | **Yes** | Yes | No |
+| Main timeout covers body | **No** | Yes | Yes |
+| **Total pitfalls** | **3** | **2** | **1** |
 
-### 各言語の推奨設定
+### Recommended Settings
 
 #### Node.js
 
@@ -172,24 +172,24 @@ const client = new S3Client({
   requestHandler: new NodeHttpHandler({
     requestTimeout: 5000,
     connectionTimeout: 3000,
-    throwOnRequestTimeout: true,  // これを忘れない
+    throwOnRequestTimeout: true,  // Don't forget this
   }),
   maxAttempts: 3,
 });
 
-// さらに、ボディ読み取りには必ずアプリケーションレベルのタイムアウトを設定する
+// Always use application-level timeout for body reads
 await client.send(command, { abortSignal: AbortSignal.timeout(5000) });
 ```
 
 #### Go
 
 ```go
-// 方法 A: リクエスト単位のタイムアウト（推奨）
+// Option A: Per-request timeout (recommended)
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 result, err := client.GetObject(ctx, input)
 
-// 方法 B: クライアント全体のタイムアウト
+// Option B: Client-wide timeout
 httpClient := &http.Client{
     Timeout: 30 * time.Second,
     Transport: &http.Transport{
@@ -216,10 +216,10 @@ $client = new S3Client([
 ]);
 ```
 
-## rodriguez のポート一覧
+## Rodriguez Port Mapping
 
-| ポート | 用途 |
-| -------- | ------ |
+| Port | Behavior |
+| --- | --- |
 | 10200 | Control port |
 | 10201 | RefuseConnection |
 | 10202 | NotAccept |
