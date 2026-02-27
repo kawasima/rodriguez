@@ -1,13 +1,13 @@
 # Rodriguez Examples
 
 A collection of multi-language fault injection test examples using Rodriguez.
-Each language demonstrates how AWS SDKs behave under various timeout scenarios with real tests.
+Each language demonstrates how cloud SDKs (AWS, GCP) behave under various timeout scenarios with real tests.
 
 ## Language Examples
 
-| Directory | Language | Test Framework | AWS SDK | Tests |
+| Directory | Language | Test Framework | SDK | Tests |
 | --- | --- | --- | --- | --- |
-| [nodejs/](nodejs/) | Node.js 18+ | vitest | AWS SDK v3 (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`) | 32 |
+| [nodejs/](nodejs/) | Node.js 18+ | vitest | AWS SDK v3 (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`), GCP (`@google-cloud/storage`) | 43 |
 | [go/](go/) | Go 1.21+ | `go test` | AWS SDK for Go v2 (`aws-sdk-go-v2`) | 27 |
 | [php/](php/) | PHP 8.1+ | PHPUnit | AWS SDK for PHP (`aws/aws-sdk-php` + Guzzle/cURL) | 33 |
 
@@ -23,9 +23,9 @@ cd examples/go && go test -v -count=1 -timeout 120s ./...
 cd examples/php && composer install && vendor/bin/phpunit --testdox
 ```
 
-## AWS SDK Timeout Pitfalls: Cross-Language Comparison
+## Cloud SDK Timeout Pitfalls: Cross-SDK Comparison
 
-We tested three AWS SDKs against the same fault patterns (AcceptButSilent, SlowResponse, ResponseHeaderOnly) and summarized the timeout behavior differences.
+We tested AWS SDKs (3 languages) and `@google-cloud/storage` against the same fault patterns (AcceptButSilent, SlowResponse, ResponseHeaderOnly) and summarized the timeout behavior differences.
 
 ### Common Pitfall: Default Timeout Is Infinite
 
@@ -120,50 +120,86 @@ $client = new S3Client([
 ]);
 ```
 
+### GCP `@google-cloud/storage` — No Timeout at Any Level
+
+`@google-cloud/storage` uses gaxios (Axios-based) as its HTTP client. Unlike AWS SDK v3, **there is no library-level timeout configuration at all**.
+
+- No `requestTimeout` equivalent
+- No `AbortSignal` support on individual API calls
+- Constructor `timeout` option has no effect
+- `retryOptions` controls retry count but not per-request timeout
+
+This makes it the most dangerous SDK tested — every operation can hang indefinitely with no built-in way to prevent it.
+
+**The only workaround is application-level `Promise.race`:**
+
+```js
+import { Storage } from '@google-cloud/storage';
+
+const storage = new Storage({
+  projectId: 'my-project',
+  retryOptions: { maxRetries: 3 },
+});
+
+// Wrap every operation with a timeout
+async function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('GCS operation timeout')), ms)),
+  ]);
+}
+
+const [buckets] = await withTimeout(storage.getBuckets(), 5000);
+const [contents] = await withTimeout(
+  storage.bucket('b').file('key').download(), 10000);
+```
+
 ### Behavior Comparison by Fault Pattern
 
 #### No Response (AcceptButSilent) — Server accepts connection but never responds
 
-| Setting | Node.js | Go | PHP |
-| --- | --- | --- | --- |
-| Default | Hangs | Hangs | Hangs |
-| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs | — |
-| `requestTimeout` + `throwOnRequestTimeout` | **Timeout** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
-| `AbortSignal` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
+| Setting | AWS SDK v3 (Node.js) | AWS SDK (Go) | AWS SDK (PHP) | GCP Storage (Node.js) |
+| --- | --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs | Hangs |
+| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs | — | N/A |
+| `requestTimeout` + `throwOnRequestTimeout` | **Timeout** | — | — | N/A |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** | N/A |
+| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — | **Timeout** |
 
 #### Slow Body (SlowResponse) — Headers arrive immediately, body sent at 1 byte/sec
 
-| Setting | Node.js | Go | PHP |
-| --- | --- | --- | --- |
-| Default | Hangs | Hangs | Hangs |
-| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs (headers arrived) | — |
-| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
-| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
+| Setting | AWS SDK v3 (Node.js) | AWS SDK (Go) | AWS SDK (PHP) | GCP Storage (Node.js) |
+| --- | --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs | Hangs |
+| `requestTimeout` / `ResponseHeaderTimeout` only | Warning only | Hangs (headers arrived) | — | N/A |
+| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — | N/A |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** | N/A |
+| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — | **Timeout** |
 
 #### Incomplete Body (ResponseHeaderOnly) — Headers + 1 byte, then silence
 
-| Setting | Node.js | Go | PHP |
-| --- | --- | --- | --- |
-| Default | Hangs | Hangs | Hangs |
-| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — |
-| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** |
-| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — |
+| Setting | AWS SDK v3 (Node.js) | AWS SDK (Go) | AWS SDK (PHP) | GCP Storage (Node.js) |
+| --- | --- | --- | --- | --- |
+| Default | Hangs | Hangs | Hangs | Hangs |
+| `requestTimeout` + `throwOnRequestTimeout` | **Hangs (headers arrived)** | — | — | N/A |
+| `http.Client.Timeout` / Guzzle `timeout` | — | **Timeout** | **Timeout** | N/A |
+| `AbortSignal` / `Promise.race` / `context.WithTimeout` | **Timeout** | **Timeout** | — | **Timeout** |
 
 ### Pitfall Count Comparison
 
-| Pitfall | Node.js | Go | PHP |
-| --- | --- | --- | --- |
-| Default timeout is infinite | Yes | Yes | Yes |
-| Timeout setting doesn't throw | **Yes** | No | No |
-| Header timeout doesn't cover body | **Yes** | Yes | No |
-| Main timeout covers body | **No** | Yes | Yes |
-| **Total pitfalls** | **3** | **2** | **1** |
+| Pitfall | AWS SDK v3 (Node.js) | AWS SDK (Go) | AWS SDK (PHP) | GCP Storage (Node.js) |
+| --- | --- | --- | --- | --- |
+| Default timeout is infinite | Yes | Yes | Yes | **Yes** |
+| Timeout setting doesn't throw | **Yes** | No | No | N/A (no setting) |
+| Header timeout doesn't cover body | **Yes** | Yes | No | N/A (no setting) |
+| Library-level timeout covers body | **No** | Yes | Yes | **No** |
+| Any library-level timeout exists | Yes | Yes | Yes | **No** |
+| **Workaround** | `AbortSignal` | `context.WithTimeout` | (built-in) | **`Promise.race` only** |
 
 ### Recommended Settings
 
-#### Node.js
+#### Node.js (AWS SDK v3)
 
 ```js
 import { NodeHttpHandler } from '@smithy/node-http-handler';
@@ -179,6 +215,30 @@ const client = new S3Client({
 
 // Always use application-level timeout for body reads
 await client.send(command, { abortSignal: AbortSignal.timeout(5000) });
+```
+
+#### Node.js (@google-cloud/storage)
+
+```js
+import { Storage } from '@google-cloud/storage';
+
+const storage = new Storage({
+  projectId: 'my-project',
+  retryOptions: { maxRetries: 3 },
+});
+
+// No library-level timeout exists — wrap EVERY call with Promise.race
+async function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('GCS operation timeout')), ms)),
+  ]);
+}
+
+const [buckets] = await withTimeout(storage.getBuckets(), 5000);
+const [contents] = await withTimeout(
+  storage.bucket('b').file('key').download(), 10000);
 ```
 
 #### Go
@@ -235,3 +295,4 @@ $client = new S3Client([
 | 10212 | RefuseAuthentication |
 | 10213 | S3 Mock |
 | 10214 | SQS Mock |
+| 10215 | GCS Mock |

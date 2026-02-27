@@ -16,9 +16,21 @@ import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
+/**
+ * Mock implementation of Amazon SQS as an HTTP instability behavior.
+ *
+ * <p>Supports basic SQS operations (create/delete queue, send/receive/delete message,
+ * get queue URL) using in-memory storage. Both AWS Query and JSON protocols are supported.</p>
+ */
 public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
     private static final Logger LOG = Logger.getLogger(SQSMock.class.getName());
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * Constructs an SQSMock instance.
+     */
+    public SQSMock() {
+    }
 
     private String resolveActionName(HttpExchange exchange, RequestParams params) {
         // AWS JSON protocol: X-Amz-Target header (e.g. "AmazonSQS.GetQueueUrl")

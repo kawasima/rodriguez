@@ -11,7 +11,20 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * An HTTP behavior that returns a response body exceeding the expected size.
+ *
+ * <p>Responds with a large payload (default 10 MB) of repeated bytes, simulating
+ * an oversized or unexpectedly large response that may cause client-side issues.
+ */
 public class OversizedResponse implements HttpInstabilityBehavior, MetricsAvailable {
+
+    /**
+     * Creates a new {@code OversizedResponse} behavior instance.
+     */
+    public OversizedResponse() {
+    }
+
     private long responseSize = 10_485_760; // 10 MB
     private String contentType = "application/octet-stream";
     private int chunkSize = 8192;
@@ -45,26 +58,56 @@ public class OversizedResponse implements HttpInstabilityBehavior, MetricsAvaila
         }
     }
 
+    /**
+     * Returns the total response size in bytes.
+     *
+     * @return the response size in bytes
+     */
     public long getResponseSize() {
         return responseSize;
     }
 
+    /**
+     * Sets the total response size in bytes.
+     *
+     * @param responseSize the response size in bytes
+     */
     public void setResponseSize(long responseSize) {
         this.responseSize = responseSize;
     }
 
+    /**
+     * Returns the content type header value.
+     *
+     * @return the content type string
+     */
     public String getContentType() {
         return contentType;
     }
 
+    /**
+     * Sets the content type header value.
+     *
+     * @param contentType the content type string
+     */
     public void setContentType(String contentType) {
         this.contentType = contentType;
     }
 
+    /**
+     * Returns the chunk size used for writing the response.
+     *
+     * @return the chunk size in bytes
+     */
     public int getChunkSize() {
         return chunkSize;
     }
 
+    /**
+     * Sets the chunk size used for writing the response.
+     *
+     * @param chunkSize the chunk size in bytes
+     */
     public void setChunkSize(int chunkSize) {
         this.chunkSize = chunkSize;
     }

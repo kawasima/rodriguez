@@ -24,12 +24,26 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * A FUSE filesystem that delegates to a backing directory and injects faults
+ * based on configured {@link FaultRule} entries.
+ *
+ * <p>Each filesystem operation checks the fault rules for a matching rule. If a
+ * matching fault is found, it is applied instead of (or in addition to) the
+ * normal operation. Otherwise, the operation proceeds against the backing directory.
+ */
 public class FaultInjectionFS extends FuseStubFS {
     private static final Logger LOG = Logger.getLogger(FaultInjectionFS.class.getName());
 
     private final Path backingPath;
     private final List<FaultRule> faultRules;
 
+    /**
+     * Constructs a new {@code FaultInjectionFS} with the given backing path and fault rules.
+     *
+     * @param backingPath the real filesystem path where files are stored
+     * @param faultRules  the list of fault rules to evaluate for each operation
+     */
     public FaultInjectionFS(Path backingPath, List<FaultRule> faultRules) {
         this.backingPath = backingPath;
         this.faultRules = faultRules;

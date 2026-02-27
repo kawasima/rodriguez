@@ -14,6 +14,12 @@ import java.util.logging.LogManager;
 
 import static picocli.CommandLine.*;
 
+/**
+ * CLI entry point for the Rodriguez harness server.
+ *
+ * <p>Uses PicoCLI to parse command-line options such as {@code --config} for specifying
+ * a configuration file. Starts the {@link HarnessServer} and blocks until shutdown.
+ */
 @Command(name = "rodriguez", version = "0.1.0")
 public class HarnessServerCommand implements Callable<Integer>, IExitCodeExceptionMapper {
     static {
@@ -24,6 +30,12 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * Creates a new harness server command instance.
+     */
+    public HarnessServerCommand() {
     }
 
     @Option(names = {"-c", "--config"})
@@ -55,6 +67,11 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
         return 1;
     }
 
+    /**
+     * Application entry point that parses arguments and starts the harness server.
+     *
+     * @param args the command-line arguments
+     */
     public static void main(String[] args) {
         CommandLine commandLine = new CommandLine(new HarnessServerCommand());
         commandLine.parseArgs(args);

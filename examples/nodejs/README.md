@@ -77,4 +77,21 @@ Normal operations and timeout pitfall demos using AWS SDK v3 (`@aws-sdk/client-s
 | PITFALL: send() succeeds but body read hangs | 10205 (SlowResponse) | `send()` succeeds, body read hangs; detected with `Promise.race` |
 | PITFALL: send() succeeds but body read hangs | 10207 (ResponseHeaderOnly) | Same as above |
 
-See [examples/README.md](../README.md) for detailed AWS SDK timeout pitfalls and cross-language comparison.
+### 4. GCS Tests (`test/gcs.test.js`)
+
+Normal operations and timeout pitfall demos using `@google-cloud/storage`.
+
+**Normal operations (port 10215):** createBucket, file.save, getBuckets, getFiles, download, file.delete, bucket.delete
+
+**Fault injection tests:**
+
+| Test Name | Port | Description |
+| --- | --- | --- |
+| PITFALL: default client hangs | 10209 (AcceptButSilent) | Default has no timeout; detected with 3s `Promise.race` |
+| FIX: application-level timeout | 10209 (AcceptButSilent) | `Promise.race` times out in ~1s |
+| PITFALL: download hangs on slow body | 10205 (SlowResponse) | Body read hangs; detected with `Promise.race` |
+| PITFALL: download hangs | 10207 (ResponseHeaderOnly) | Same as above |
+
+**Key difference from AWS SDK:** `@google-cloud/storage` does not expose any per-request timeout option (`requestTimeout`, `AbortSignal`, etc.). The **only** way to protect against hangs is application-level `Promise.race`.
+
+See [examples/README.md](../README.md) for detailed timeout pitfalls and cross-SDK comparison.

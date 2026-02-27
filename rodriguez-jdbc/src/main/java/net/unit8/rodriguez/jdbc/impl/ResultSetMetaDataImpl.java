@@ -5,9 +5,17 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.util.List;
 
+/**
+ * A mock {@link ResultSetMetaData} implementation that provides column metadata for the Rodriguez mock result set.
+ */
 public class ResultSetMetaDataImpl implements ResultSetMetaData {
     private final List<String> columns;
 
+    /**
+     * Constructs a new {@code ResultSetMetaDataImpl} with the given column names.
+     *
+     * @param columns the list of column names
+     */
     public ResultSetMetaDataImpl(List<String> columns) {
         this.columns = columns;
     }

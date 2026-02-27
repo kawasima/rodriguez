@@ -12,7 +12,20 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An HTTP behavior that returns an incomplete JSON response body.
+ *
+ * <p>Responds with HTTP 200 and a truncated JSON string (just {@code "&#123;"}),
+ * simulating a broken or prematurely terminated JSON response.
+ */
 public class BrokenJson implements HttpInstabilityBehavior, MetricsAvailable {
+
+    /**
+     * Creates a new {@code BrokenJson} behavior instance.
+     */
+    public BrokenJson() {
+    }
+
     int delay = 0;
 
     @Override

@@ -10,6 +10,9 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 
+/**
+ * A mock {@link ResultSet} implementation that reads row data from the Rodriguez mock database server.
+ */
 public class ResultSetImpl implements ResultSet {
     private final Statement stmt;
     private final ResultSetMetaData meta;

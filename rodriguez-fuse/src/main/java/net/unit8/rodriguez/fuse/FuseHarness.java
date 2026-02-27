@@ -6,6 +6,12 @@ import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Manages the lifecycle of a FUSE fault injection filesystem.
+ *
+ * <p>Creates the mount and backing directories, mounts the {@link FaultInjectionFS},
+ * and provides methods to start and shut down the filesystem.
+ */
 public class FuseHarness {
     private static final Logger LOG = Logger.getLogger(FuseHarness.class.getName());
 
@@ -13,10 +19,21 @@ public class FuseHarness {
     private FaultInjectionFS filesystem;
     private Thread fuseThread;
 
+    /**
+     * Constructs a new {@code FuseHarness} with the given configuration.
+     *
+     * @param config the FUSE configuration specifying mount path, backing path, and fault rules
+     */
     public FuseHarness(FuseConfig config) {
         this.config = config;
     }
 
+    /**
+     * Starts the FUSE filesystem.
+     *
+     * <p>Creates the mount and backing directories if they do not exist,
+     * then mounts the fault injection filesystem in a daemon thread.
+     */
     public void start() {
         Path mountPath = Path.of(config.getMountPath());
         Path backingPath = Path.of(config.getBackingPath());
@@ -43,6 +60,9 @@ public class FuseHarness {
         LOG.info("FUSE filesystem mounted at " + mountPath + " (backing: " + backingPath + ")");
     }
 
+    /**
+     * Shuts down the FUSE filesystem by unmounting it and interrupting the FUSE thread.
+     */
     public void shutdown() {
         if (filesystem != null) {
             try {
@@ -57,6 +77,11 @@ public class FuseHarness {
         }
     }
 
+    /**
+     * Returns the FUSE configuration.
+     *
+     * @return the FUSE configuration
+     */
     public FuseConfig getConfig() {
         return config;
     }

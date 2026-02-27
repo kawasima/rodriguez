@@ -10,6 +10,12 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executor;
 
+/**
+ * An instability behavior that operates at the HTTP level.
+ *
+ * <p>Implementations use {@link com.sun.net.httpserver.HttpServer} and apply fault
+ * injection logic in the {@link #handle(HttpExchange)} method.
+ */
 public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAvailable {
     @Override
     default Runnable createServer(Executor executor, int port) {
@@ -32,11 +38,24 @@ public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAva
         }
     }
 
+    /**
+     * Returns the behavior instance used to handle HTTP exchanges.
+     *
+     * <p>Subclasses may override this to return a shared or prototype instance.
+     *
+     * @return the {@link HttpInstabilityBehavior} instance
+     */
     @JsonIgnore
     default HttpInstabilityBehavior getInstance() {
         return this;
     }
 
+    /**
+     * Handles an HTTP exchange with fault injection logic.
+     *
+     * @param exchange the HTTP exchange to handle
+     * @throws InterruptedException if the handling thread is interrupted
+     */
     default void handle(HttpExchange exchange) throws InterruptedException {
         try {
             exchange.sendResponseHeaders(404, 0L);

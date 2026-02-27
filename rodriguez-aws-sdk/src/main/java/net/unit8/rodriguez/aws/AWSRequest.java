@@ -14,10 +14,20 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * Represents a parsed AWS HTTP request, encapsulating the HTTP method, URI, body, and parameters.
+ *
+ * <p>Instances are created via the {@link #of(HttpExchange, RequestParams)} or
+ * {@link #of(HttpExchange)} factory methods.</p>
+ */
 public class AWSRequest implements Serializable {
+    /** The parsed request parameters. */
     private final RequestParams params;
+    /** The HTTP method of the request. */
     private final HttpMethod method;
+    /** The request URI. */
     private final URI requestURI;
+    /** The raw request body input stream. */
     private final InputStream body;
 
     private AWSRequest(HttpMethod method,
@@ -30,28 +40,62 @@ public class AWSRequest implements Serializable {
         this.body = body;
     }
 
+    /**
+     * Returns the HTTP method of this request.
+     *
+     * @return the HTTP method
+     */
     public HttpMethod getMethod() {
         return method;
     }
 
+    /**
+     * Returns the request body as an input stream.
+     *
+     * @return the body input stream
+     */
     public InputStream getBody() {
         return body;
     }
 
+    /**
+     * Returns the request URI.
+     *
+     * @return the request URI
+     */
     public URI getRequestURI() {
         return requestURI;
     }
 
+    /**
+     * Returns the parsed request parameters.
+     *
+     * @return the request parameters
+     */
     public RequestParams getParams() {
         return params;
     }
 
+    /**
+     * Creates an {@code AWSRequest} from the given HTTP exchange and pre-parsed parameters.
+     *
+     * @param exchange the HTTP exchange
+     * @param params   the pre-parsed request parameters
+     * @return a new {@code AWSRequest} instance
+     */
     public static AWSRequest of(HttpExchange exchange, RequestParams params) {
         URI requestURI = exchange.getRequestURI();
         HttpMethod method = HttpMethod.valueOf(exchange.getRequestMethod());
         return new AWSRequest(method, requestURI, exchange.getRequestBody(), params);
     }
 
+    /**
+     * Creates an {@code AWSRequest} from the given HTTP exchange, automatically parsing
+     * parameters from the query string and form-encoded body.
+     *
+     * @param exchange the HTTP exchange
+     * @return a new {@code AWSRequest} instance
+     */
     public static AWSRequest of(HttpExchange exchange) {
         URI requestURI = exchange.getRequestURI();
         HttpMethod method = HttpMethod.valueOf(exchange.getRequestMethod());

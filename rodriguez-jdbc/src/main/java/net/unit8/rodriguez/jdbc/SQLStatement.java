@@ -11,6 +11,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
+/**
+ * Represents a SQL statement with a unique identifier derived from its SHA-1 hash.
+ *
+ * <p>The statement is lazily parsed to determine its type ({@link JDBCCommand}) and column list.
+ * The SHA-1 hash of the SQL text is used to locate corresponding CSV fixture files.</p>
+ */
 public class SQLStatement {
     private final String sql;
     private final String sqlId;
@@ -19,6 +25,11 @@ public class SQLStatement {
     private JDBCCommand type;
     private List<String> columns;
 
+    /**
+     * Constructs a new {@code SQLStatement} with the given SQL text.
+     *
+     * @param sql the SQL text
+     */
     public SQLStatement(String sql) {
         this.sql = sql;
         try {
@@ -29,6 +40,11 @@ public class SQLStatement {
         }
     }
 
+    /**
+     * Returns the unique identifier (SHA-1 hex digest) of this SQL statement.
+     *
+     * @return the statement identifier
+     */
     public String getId() {
         return sqlId;
     }
@@ -44,6 +60,11 @@ public class SQLStatement {
         }
     }
 
+    /**
+     * Returns the list of column names extracted from this SQL statement.
+     *
+     * @return the column names
+     */
     public List<String> getColumns() {
         synchronized (this) {
             if (!parsed) {
@@ -53,6 +74,11 @@ public class SQLStatement {
         return columns;
     }
 
+    /**
+     * Returns the JDBC command type of this SQL statement (e.g., query or update).
+     *
+     * @return the JDBC command type
+     */
     public JDBCCommand getType() {
         synchronized (this) {
             if (!parsed) {
@@ -62,6 +88,12 @@ public class SQLStatement {
         return type;
     }
 
+    /**
+     * Creates a {@link BufferedReader} for the CSV fixture file corresponding to this statement.
+     *
+     * @param baseDirectory the base directory containing fixture files
+     * @return a reader for the fixture CSV file
+     */
     public BufferedReader createFixtureReader(File baseDirectory) {
         try {
             return new BufferedReader(new FileReader(new File(baseDirectory, sqlId + ".csv")));
@@ -69,6 +101,12 @@ public class SQLStatement {
             throw new UncheckedIOException(e);
         }
     }
+    /**
+     * Writes this statement's command type and SQL text to the given output stream.
+     *
+     * @param os the data output stream to write to
+     * @throws IOException if an I/O error occurs
+     */
     public void write(DataOutputStream os) throws IOException {
         os.writeInt(getType().ordinal());
         os.writeUTF(sql);

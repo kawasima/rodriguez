@@ -8,6 +8,9 @@ import java.sql.*;
 import java.util.Calendar;
 import java.util.Map;
 
+/**
+ * A mock {@link CallableStatement} implementation for the Rodriguez mock JDBC driver.
+ */
 public class CallableStatementImpl extends StatementImpl implements CallableStatement {
     CallableStatementImpl(ConnectionImpl conn) {
         super(conn);

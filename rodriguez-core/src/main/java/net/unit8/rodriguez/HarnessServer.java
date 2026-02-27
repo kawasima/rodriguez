@@ -13,6 +13,12 @@ import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+/**
+ * Main server that orchestrates fault injection behaviors across multiple ports.
+ *
+ * <p>Loads default configuration from classpath resources, starts behavior servers
+ * on configured ports, and manages extensions via {@link java.util.ServiceLoader}.
+ */
 public class HarnessServer {
     private static final Logger LOG = Logger.getLogger(HarnessServer.class.getName());
     private final HarnessConfig config;
@@ -25,6 +31,12 @@ public class HarnessServer {
     private ExecutorService executor;
     private final List<HarnessExtension> activeExtensions = new ArrayList<>();
 
+    /**
+     * Creates a harness server with default configuration loaded from the classpath.
+     *
+     * <p>Discovers and merges all {@code META-INF/rodriguez/default-config.json}
+     * resources from the classpath.
+     */
     public HarnessServer() {
         ConfigParser parser = new ConfigParser();
         config = new HarnessConfig();
@@ -42,10 +54,25 @@ public class HarnessServer {
         }
     }
 
+    /**
+     * Creates a harness server with the given configuration.
+     *
+     * @param config the harness configuration
+     */
     public HarnessServer(HarnessConfig config) {
         this.config = config;
     }
 
+    /**
+     * Creates a server for the given behavior on the specified port.
+     *
+     * <p>If the behavior implements {@link MetricsAvailable}, the metric registry
+     * is injected before the server is created.
+     *
+     * @param behavior the instability behavior to serve
+     * @param port     the port number to bind to
+     * @return a {@link Runnable} that shuts down the created server when invoked
+     */
     public Runnable createServer(InstabilityBehavior behavior, int port) {
         if (behavior instanceof MetricsAvailable available) {
             available.setMetricRegistry(metricRegistry);
@@ -56,10 +83,21 @@ public class HarnessServer {
         return () -> {};
     }
 
+    /**
+     * Starts the harness server using a cached thread pool executor.
+     */
     public void start() {
         start(Executors.newCachedThreadPool());
     }
 
+    /**
+     * Starts the harness server using the given executor service.
+     *
+     * <p>Creates behavior servers on all configured ports, starts the control server
+     * if configured, and initializes any registered extensions.
+     *
+     * @param executor the executor service to use for handling connections
+     */
     public void start(ExecutorService executor) {
         config.getControlPort().ifPresent(p -> controlServer = new ControlServer(p, this));
 
@@ -91,6 +129,11 @@ public class HarnessServer {
         LOG.info("rodriguez server has started");
     }
 
+    /**
+     * Blocks the calling thread until the server is shut down.
+     *
+     * @throws InterruptedException if the waiting thread is interrupted
+     */
     public void await() throws InterruptedException {
         synchronized (lock) {
             while(!terminated) {
@@ -99,14 +142,28 @@ public class HarnessServer {
         }
     }
 
+    /**
+     * Returns the harness configuration.
+     *
+     * @return the current {@link HarnessConfig}
+     */
     public HarnessConfig getConfig() {
         return this.config;
     }
 
+    /**
+     * Returns the metric registry used to track behavior invocations.
+     *
+     * @return the {@link MetricRegistry}
+     */
     public MetricRegistry getMetricRegistry() {
         return this.metricRegistry;
     }
 
+    /**
+     * Shuts down the harness server, stopping all behavior servers, extensions,
+     * and the control server.
+     */
     public void shutdown() {
         LOG.info("shutdown");
         synchronized (lock) {

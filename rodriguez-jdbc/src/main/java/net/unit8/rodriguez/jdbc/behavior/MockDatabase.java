@@ -21,12 +21,27 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+/**
+ * A socket-level instability behavior that simulates a mock JDBC database server.
+ *
+ * <p>This behavior handles JDBC commands over a socket connection, serving query results
+ * from CSV fixture files and introducing configurable delays to simulate slow database responses.</p>
+ */
 public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable {
     private static final Logger LOG = Logger.getLogger(MockDatabase.class.getName());
 
+    /** The delay in milliseconds applied when executing a query or update. */
     public long delayExecution = 1000L;
+    /** The delay in milliseconds applied when advancing to the next row in a result set. */
     public long delayResultSetNext = 200L;
+    /** The directory path where CSV fixture data files are stored. */
     public String dataDirectory = "data";
+
+    /**
+     * Constructs a new {@code MockDatabase} with default settings.
+     */
+    public MockDatabase() {
+    }
 
     private final CsvMapper mapper = CsvMapper.builder().build();
     private final CsvSchema schema = CsvSchema.builder()
@@ -161,26 +176,56 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
         }
     }
 
+    /**
+     * Returns the delay in milliseconds applied when executing a query or update.
+     *
+     * @return the execution delay in milliseconds
+     */
     public long getDelayExecution() {
         return delayExecution;
     }
 
+    /**
+     * Sets the delay in milliseconds applied when executing a query or update.
+     *
+     * @param delayExecution the execution delay in milliseconds
+     */
     public void setDelayExecution(long delayExecution) {
         this.delayExecution = delayExecution;
     }
 
+    /**
+     * Returns the delay in milliseconds applied when advancing to the next row in a result set.
+     *
+     * @return the result set next delay in milliseconds
+     */
     public long getDelayResultSetNext() {
         return delayResultSetNext;
     }
 
+    /**
+     * Sets the delay in milliseconds applied when advancing to the next row in a result set.
+     *
+     * @param delayResultSetNext the result set next delay in milliseconds
+     */
     public void setDelayResultSetNext(long delayResultSetNext) {
         this.delayResultSetNext = delayResultSetNext;
     }
 
+    /**
+     * Returns the directory path where CSV fixture data files are stored.
+     *
+     * @return the data directory path
+     */
     public String getDataDirectory() {
         return dataDirectory;
     }
 
+    /**
+     * Sets the directory path where CSV fixture data files are stored.
+     *
+     * @param dataDirectory the data directory path
+     */
     public void setDataDirectory(String dataDirectory) {
         this.dataDirectory = dataDirectory;
     }

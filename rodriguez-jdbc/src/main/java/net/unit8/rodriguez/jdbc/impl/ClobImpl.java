@@ -5,6 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Clob;
 import java.sql.SQLException;
 
+/**
+ * A mock {@link Clob} implementation backed by a {@link StringBuilder}.
+ */
 public class ClobImpl implements Clob {
     private final StringBuilder buffer;
 

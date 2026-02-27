@@ -11,8 +11,22 @@ import java.net.SocketException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+/**
+ * A socket behavior that waits for a configurable delay and then sends a TCP RST.
+ *
+ * <p>After accepting a connection, this behavior sets {@code SO_LINGER} to zero and
+ * waits before closing the socket, which causes a TCP RST to be sent instead of a
+ * graceful FIN, simulating an abrupt connection reset.
+ */
 public class NoResponseAndSendRST implements SocketInstabilityBehavior, MetricsAvailable {
     private static final Logger LOG = Logger.getLogger(NoResponseAndSendRST.class.getName());
+
+    /**
+     * Creates a new {@code NoResponseAndSendRST} behavior instance.
+     */
+    public NoResponseAndSendRST() {
+    }
+
     private long delay = 5000;
 
     @Override
@@ -34,10 +48,20 @@ public class NoResponseAndSendRST implements SocketInstabilityBehavior, MetricsA
         }
     }
 
+    /**
+     * Returns the delay in milliseconds before sending the RST.
+     *
+     * @return the delay in milliseconds
+     */
     public long getDelay() {
         return delay;
     }
 
+    /**
+     * Sets the delay in milliseconds before sending the RST.
+     *
+     * @param delay the delay in milliseconds
+     */
     public void setDelay(long delay) {
         this.delay = delay;
     }

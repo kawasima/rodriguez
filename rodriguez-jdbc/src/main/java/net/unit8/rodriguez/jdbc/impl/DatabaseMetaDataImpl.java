@@ -2,8 +2,17 @@ package net.unit8.rodriguez.jdbc.impl;
 
 import java.sql.*;
 
+/**
+ * A mock {@link DatabaseMetaData} implementation for the Rodriguez mock JDBC driver.
+ */
 public class DatabaseMetaDataImpl implements DatabaseMetaData {
     private final int sqlState = DatabaseMetaData.sqlStateSQL;
+
+    /**
+     * Constructs a new {@code DatabaseMetaDataImpl} with default values.
+     */
+    public DatabaseMetaDataImpl() {
+    }
 
     @Override
     public boolean allProceduresAreCallable() throws SQLException {

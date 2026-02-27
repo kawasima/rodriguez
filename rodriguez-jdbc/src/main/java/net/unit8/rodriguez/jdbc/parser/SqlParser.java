@@ -11,7 +11,23 @@ import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.upsert.Upsert;
 import net.unit8.rodriguez.jdbc.JDBCCommand;
 
+/**
+ * Parses SQL statements to determine their command type and extract column information.
+ */
 public class SqlParser {
+        /**
+         * Constructs a new {@code SqlParser}.
+         */
+        public SqlParser() {
+        }
+
+        /**
+         * Parses the given SQL string and returns a {@link ParseResult} containing the command type and columns.
+         *
+         * @param sql the SQL string to parse
+         * @return the parse result containing the command type and column names
+         * @throws JSQLParserException if the SQL cannot be parsed
+         */
         public ParseResult parse(String sql) throws JSQLParserException {
             Statement stmt = CCJSqlParserUtil.parse(sql);
             ParseResult parseResult = new ParseResult();

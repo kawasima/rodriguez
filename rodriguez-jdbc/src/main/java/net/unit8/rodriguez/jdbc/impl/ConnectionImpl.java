@@ -17,6 +17,9 @@ import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * A mock {@link Connection} implementation that communicates with the Rodriguez mock database server over a socket.
+ */
 public class ConnectionImpl implements Connection {
     private static final Logger LOG = Logger.getLogger(ConnectionImpl.class.getName());
     private final Socket socket;
@@ -32,6 +35,13 @@ public class ConnectionImpl implements Connection {
     private Map<String, Class<?>> typeMap = new HashMap<>();
     private int holdability;
 
+    /**
+     * Constructs a new connection to the Rodriguez mock database server.
+     *
+     * @param url  the JDBC URL in the form {@code jdbc:rodriguez://<host>:<port>}
+     * @param info the connection properties (currently unused)
+     * @throws SQLException if a socket connection cannot be established
+     */
     public ConnectionImpl(String url, Properties info) throws SQLException {
         String name = url.substring("jdbc:rodriguez:".length());
         URI uri = URI.create(name);
@@ -346,14 +356,32 @@ public class ConnectionImpl implements Connection {
         }
     }
 
+    /**
+     * Returns a {@link DataInputStream} wrapping the socket's input stream.
+     *
+     * @return the data input stream
+     * @throws IOException if an I/O error occurs
+     */
     protected DataInputStream getInputStream() throws IOException {
         return new DataInputStream(socket.getInputStream());
     }
 
+    /**
+     * Returns a {@link DataOutputStream} wrapping the socket's output stream.
+     *
+     * @return the data output stream
+     * @throws IOException if an I/O error occurs
+     */
     protected DataOutputStream getOutputStream() throws IOException {
         return new DataOutputStream(socket.getOutputStream());
     }
 
+    /**
+     * Sets the socket timeout for this connection.
+     *
+     * @param millis the timeout in milliseconds; 0 means infinite timeout
+     * @throws SocketException if the socket option cannot be set
+     */
     public void setSocketTimeout(int millis) throws SocketException {
         this.socket.setSoTimeout(millis);
     }

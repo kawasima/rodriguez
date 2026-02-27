@@ -6,12 +6,24 @@ import java.sql.*;
 import java.util.Properties;
 import java.util.logging.Logger;
 
+/**
+ * A JDBC {@link Driver} implementation for the Rodriguez mock database.
+ *
+ * <p>This driver accepts URLs of the form {@code jdbc:rodriguez://<host>:<port>} and creates
+ * connections to the Rodriguez mock database server.</p>
+ */
 public class RodriguezDriver implements Driver {
     private static final RodriguezDriver INSTANCE = new RodriguezDriver();
     private static boolean registered;
 
     static {
         load();
+    }
+
+    /**
+     * Constructs a new {@code RodriguezDriver} instance.
+     */
+    public RodriguezDriver() {
     }
 
     @Override
@@ -52,6 +64,11 @@ public class RodriguezDriver implements Driver {
         return null;
     }
 
+    /**
+     * Registers this driver with the {@link DriverManager} if not already registered.
+     *
+     * @return the singleton driver instance
+     */
     public static synchronized Driver load() {
         try {
             if (!registered) {
@@ -64,6 +81,11 @@ public class RodriguezDriver implements Driver {
         }
     }
 
+    /**
+     * Deregisters this driver from the {@link DriverManager}.
+     *
+     * @throws SQLException if deregistration fails
+     */
     public static synchronized void unload() throws SQLException {
         if (registered) {
             registered = false;

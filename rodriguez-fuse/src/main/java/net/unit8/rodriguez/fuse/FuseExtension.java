@@ -4,8 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.unit8.rodriguez.HarnessExtension;
 
+/**
+ * A Rodriguez harness extension that provides FUSE filesystem fault injection.
+ *
+ * <p>Registered via {@code ServiceLoader} and configured under the {@code "fuse"} key
+ * in the Rodriguez configuration JSON. Manages the lifecycle of a {@link FuseHarness}.
+ */
 public class FuseExtension implements HarnessExtension {
     private FuseHarness harness;
+
+    /**
+     * Constructs a new {@code FuseExtension}.
+     */
+    public FuseExtension() {
+    }
 
     @Override
     public String getName() {

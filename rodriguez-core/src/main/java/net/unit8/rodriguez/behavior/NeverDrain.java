@@ -9,8 +9,20 @@ import java.net.SocketException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+/**
+ * A socket behavior that accepts a connection but never reads from the receive buffer.
+ *
+ * <p>After accepting a connection, this behavior sets a small receive buffer and then
+ * sleeps indefinitely, causing the client's send buffer to fill up and block.
+ */
 public class NeverDrain implements SocketInstabilityBehavior {
     private static final Logger LOG = Logger.getLogger(NeverDrain.class.getName());
+
+    /**
+     * Creates a new {@code NeverDrain} behavior instance.
+     */
+    public NeverDrain() {
+    }
 
     @Override
     public void handle(Socket socket) throws InterruptedException {

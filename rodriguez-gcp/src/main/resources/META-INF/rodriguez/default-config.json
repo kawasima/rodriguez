@@ -1,0 +1,7 @@
+{
+  "ports": {
+    "10215": {
+      "type": "net.unit8.rodriguez.gcp.behavior.GCSMock"
+    }
+  }
+}

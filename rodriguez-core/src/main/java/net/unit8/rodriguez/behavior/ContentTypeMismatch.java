@@ -12,7 +12,20 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An HTTP behavior that returns a response with a mismatched content type.
+ *
+ * <p>By default, the {@code Content-Type} header claims {@code application/json} but the
+ * actual response body is HTML, simulating a content type mismatch error.
+ */
 public class ContentTypeMismatch implements HttpInstabilityBehavior, MetricsAvailable {
+
+    /**
+     * Creates a new {@code ContentTypeMismatch} behavior instance.
+     */
+    public ContentTypeMismatch() {
+    }
+
     private String contentType = "application/json";
     private String responseBody = "<html><body>unknown error</body></html>";
     private int responseStatus = 400;
@@ -40,34 +53,74 @@ public class ContentTypeMismatch implements HttpInstabilityBehavior, MetricsAvai
         }
     }
 
+    /**
+     * Returns the content type header value.
+     *
+     * @return the content type string
+     */
     public String getContentType() {
         return contentType;
     }
 
+    /**
+     * Sets the content type header value.
+     *
+     * @param contentType the content type string
+     */
     public void setContentType(String contentType) {
         this.contentType = contentType;
     }
 
+    /**
+     * Returns the response body.
+     *
+     * @return the response body string
+     */
     public String getResponseBody() {
         return responseBody;
     }
 
+    /**
+     * Sets the response body.
+     *
+     * @param responseBody the response body string
+     */
     public void setResponseBody(String responseBody) {
         this.responseBody = responseBody;
     }
 
+    /**
+     * Returns the HTTP response status code.
+     *
+     * @return the response status code
+     */
     public int getResponseStatus() {
         return responseStatus;
     }
 
+    /**
+     * Sets the HTTP response status code.
+     *
+     * @param responseStatus the response status code
+     */
     public void setResponseStatus(int responseStatus) {
         this.responseStatus = responseStatus;
     }
 
+    /**
+     * Returns the delay in milliseconds before sending the response.
+     *
+     * @return the delay in milliseconds
+     */
     public int getDelay() {
         return delay;
     }
 
+    /**
+     * Sets the delay in milliseconds before sending the response.
+     *
+     * @param delay the delay in milliseconds
+     */
     public void setDelay(int delay) {
         this.delay = delay;
     }

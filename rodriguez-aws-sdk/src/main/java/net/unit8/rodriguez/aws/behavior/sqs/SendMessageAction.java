@@ -11,8 +11,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Handles the SQS SendMessage API operation by computing an MD5 digest and returning a message ID.
+ */
 public class SendMessageAction implements MockAction<Map<String, String>> {
     private static final AtomicLong sequenceNumber = new AtomicLong(1);
+
+    /**
+     * Constructs a SendMessageAction.
+     */
+    public SendMessageAction() {
+    }
 
     @Override
     public Map<String, String> handle(AWSRequest request) {

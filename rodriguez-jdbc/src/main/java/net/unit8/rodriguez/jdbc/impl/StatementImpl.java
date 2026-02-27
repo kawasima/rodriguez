@@ -10,6 +10,9 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A mock {@link Statement} implementation that sends SQL commands to the Rodriguez mock database server.
+ */
 public class StatementImpl implements Statement {
     private final ConnectionImpl connection;
     private boolean closed = false;
@@ -37,6 +40,14 @@ public class StatementImpl implements Statement {
             throw new SQLException("query timeout");
         }
     }
+    /**
+     * Executes a query by sending the SQL statement to the mock server and reading back the result set.
+     *
+     * @param sqlStmt the SQL statement to execute
+     * @return the result set returned by the mock server
+     * @throws IOException  if an I/O error occurs during communication
+     * @throws SQLException if the server reports an error
+     */
     protected ResultSet executeQueryInner(SQLStatement sqlStmt) throws IOException, SQLException {
         DataOutputStream os = connection.getOutputStream();
         sqlStmt.write(os);
@@ -54,6 +65,14 @@ public class StatementImpl implements Statement {
         return new ResultSetImpl(this, meta, is, os);
     }
 
+    /**
+     * Executes an update by sending the SQL statement to the mock server and reading back the update count.
+     *
+     * @param sqlStmt the SQL statement to execute
+     * @return the number of rows affected
+     * @throws IOException  if an I/O error occurs during communication
+     * @throws SQLException if the server reports an error
+     */
     protected int executeUpdateInner(SQLStatement sqlStmt) throws IOException, SQLException {
         DataOutputStream os = connection.getOutputStream();
         sqlStmt.write(os);
@@ -319,6 +338,11 @@ public class StatementImpl implements Statement {
         return iface != null && iface.isAssignableFrom(getClass());
     }
 
+    /**
+     * Throws a {@link SQLException} if this statement has been closed.
+     *
+     * @throws SQLException if this statement is closed
+     */
     protected void assertNotClosed() throws SQLException{
         if (isClosed()) {
             throw new SQLException("Statement closed");

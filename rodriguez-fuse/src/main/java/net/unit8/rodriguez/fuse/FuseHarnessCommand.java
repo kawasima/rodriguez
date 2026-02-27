@@ -8,6 +8,12 @@ import picocli.CommandLine.Option;
 import java.io.File;
 import java.util.concurrent.Callable;
 
+/**
+ * CLI command for running the FUSE fault injection filesystem as a standalone process.
+ *
+ * <p>Reads a JSON configuration file and mounts a {@link FaultInjectionFS} that remains
+ * running until the process is terminated.
+ */
 @Command(name = "rodriguez-fuse", version = "0.3.0")
 public class FuseHarnessCommand implements Callable<Integer> {
     @Option(names = {"-c", "--config"}, required = true, description = "FUSE config file")
@@ -18,6 +24,12 @@ public class FuseHarnessCommand implements Callable<Integer> {
 
     @Option(names = {"-h", "--help"}, usageHelp = true, description = "display this help message")
     boolean usageHelpRequested;
+
+    /**
+     * Constructs a new {@code FuseHarnessCommand}.
+     */
+    public FuseHarnessCommand() {
+    }
 
     @Override
     public Integer call() throws Exception {
@@ -33,6 +45,11 @@ public class FuseHarnessCommand implements Callable<Integer> {
         return 0;
     }
 
+    /**
+     * Entry point for the FUSE harness command-line application.
+     *
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
         int exitCode = new CommandLine(new FuseHarnessCommand()).execute(args);
         System.exit(exitCode);

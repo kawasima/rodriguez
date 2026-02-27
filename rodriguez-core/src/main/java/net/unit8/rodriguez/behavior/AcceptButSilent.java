@@ -10,8 +10,20 @@ import java.net.SocketTimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+/**
+ * A socket behavior that accepts TCP connections but never sends a response.
+ *
+ * <p>After accepting a connection and draining the client's request data, this behavior
+ * silently waits indefinitely without sending any response, simulating a hung server.
+ */
 public class AcceptButSilent implements SocketInstabilityBehavior {
     private static final Logger LOG = Logger.getLogger(AcceptButSilent.class.getName());
+
+    /**
+     * Creates a new {@code AcceptButSilent} behavior instance.
+     */
+    public AcceptButSilent() {
+    }
 
     @Override
     public void handle(Socket socket) throws InterruptedException {

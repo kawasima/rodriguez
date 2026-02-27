@@ -7,7 +7,17 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * Handles the S3 DeleteObject API operation by deleting the object file from the bucket directory.
+ */
 public class DeleteObjectAction extends S3ActionBase<Void> {
+
+    /**
+     * Constructs a DeleteObjectAction.
+     */
+    public DeleteObjectAction() {
+    }
+
     @Override
     public Void handle(AWSRequest request) {
         String bucketName = request.getParams().getFirst("BucketName");

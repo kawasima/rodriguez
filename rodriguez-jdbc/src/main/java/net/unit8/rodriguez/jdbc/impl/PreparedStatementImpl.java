@@ -10,6 +10,9 @@ import java.net.URL;
 import java.sql.*;
 import java.util.Calendar;
 
+/**
+ * A mock {@link PreparedStatement} implementation that delegates query execution to the Rodriguez mock database server.
+ */
 public class PreparedStatementImpl extends StatementImpl implements PreparedStatement {
     private final SQLStatement sqlStatement;
 

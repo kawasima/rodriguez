@@ -28,6 +28,7 @@
         <module>rodriguez-core</module>
         <module>rodriguez-jdbc</module>
         <module>rodriguez-aws-sdk</module>
+        <module>rodriguez-gcp</module>
         <module>rodriguez-fuse</module>
         <module>rodriguez-build</module>
     </modules>

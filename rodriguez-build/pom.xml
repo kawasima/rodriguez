@@ -66,6 +66,11 @@
         </dependency>
         <dependency>
             <groupId>net.unit8.rodriguez</groupId>
+            <artifactId>rodriguez-gcp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.unit8.rodriguez</groupId>
             <artifactId>rodriguez-fuse</artifactId>
             <version>${project.version}</version>
         </dependency>

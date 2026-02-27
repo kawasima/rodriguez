@@ -9,7 +9,18 @@ import java.net.Socket;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An instability behavior that operates at the raw TCP socket level.
+ *
+ * <p>Implementations use a {@link ServerSocket} to accept connections and apply
+ * fault injection logic in the {@link #handle(Socket)} method.
+ */
 public interface SocketInstabilityBehavior extends InstabilityBehavior, MetricsAvailable {
+    /**
+     * Returns whether this behavior should accept incoming connections.
+     *
+     * @return {@code true} if connections should be accepted; {@code false} to block indefinitely
+     */
     default boolean canAccept() {
         return true;
     }
@@ -61,6 +72,12 @@ public interface SocketInstabilityBehavior extends InstabilityBehavior, MetricsA
         }
     }
 
+    /**
+     * Handles an accepted socket connection with fault injection logic.
+     *
+     * @param socket the accepted client socket
+     * @throws InterruptedException if the handling thread is interrupted
+     */
     default void handle(Socket socket) throws InterruptedException {
 
     }

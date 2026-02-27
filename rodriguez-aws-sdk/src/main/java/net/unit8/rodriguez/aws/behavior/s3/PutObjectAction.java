@@ -8,7 +8,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+/**
+ * Handles the S3 PutObject API operation by writing the request body to a file in the bucket directory.
+ */
 public class PutObjectAction extends S3ActionBase<Void> {
+
+    /**
+     * Constructs a PutObjectAction.
+     */
+    public PutObjectAction() {
+    }
+
     @Override
     public Void handle(AWSRequest request) {
         String bucketName = request.getParams().getFirst("BucketName");

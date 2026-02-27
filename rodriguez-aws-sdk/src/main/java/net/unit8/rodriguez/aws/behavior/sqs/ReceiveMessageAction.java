@@ -8,7 +8,17 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Handles the SQS ReceiveMessage API operation by returning a fixed test message.
+ */
 public class ReceiveMessageAction implements MockAction<Map<String, Object>> {
+
+    /**
+     * Constructs a ReceiveMessageAction.
+     */
+    public ReceiveMessageAction() {
+    }
+
     @Override
     public Map<String, Object> handle(AWSRequest params) {
         String body = "This is a testMessage";

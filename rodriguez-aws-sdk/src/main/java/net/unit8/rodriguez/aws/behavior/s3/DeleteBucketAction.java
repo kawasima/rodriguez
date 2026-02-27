@@ -11,7 +11,17 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * Handles the S3 DeleteBucket API operation by recursively deleting the bucket directory.
+ */
 public class DeleteBucketAction extends S3ActionBase<Void>{
+
+    /**
+     * Constructs a DeleteBucketAction.
+     */
+    public DeleteBucketAction() {
+    }
+
     @Override
     public Void handle(AWSRequest params) {
         Optional.ofNullable(params.getParams().getFirst("BucketName"))

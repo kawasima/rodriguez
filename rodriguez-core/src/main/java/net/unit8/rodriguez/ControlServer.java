@@ -15,6 +15,12 @@ import java.util.NoSuchElementException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * HTTP control server that exposes management endpoints for the harness.
+ *
+ * <p>Provides endpoints for retrieving configuration ({@code GET /config}),
+ * metrics ({@code GET /metrics}), and triggering shutdown ({@code POST /shutdown}).
+ */
 public class ControlServer implements HttpHandler {
     private static final Logger LOG = Logger.getLogger(ControlServer.class.getName());
 
@@ -22,6 +28,12 @@ public class ControlServer implements HttpHandler {
     private final HarnessServer harnessServer;
     private final ObjectMapper mapper;
 
+    /**
+     * Creates and starts a control server on the specified port.
+     *
+     * @param port          the port to listen on
+     * @param harnessServer the harness server to control
+     */
     public ControlServer(int port, HarnessServer harnessServer) {
         mapper = new ObjectMapper()
                 .registerModule(new Jdk8Module());
@@ -72,6 +84,9 @@ public class ControlServer implements HttpHandler {
         }
     }
 
+    /**
+     * Stops the control server immediately.
+     */
     public void shutdown() {
         server.stop(0);
     }

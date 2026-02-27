@@ -10,7 +10,19 @@ import java.io.OutputStream;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * An HTTP behavior that sends response headers and a minimal body, then hangs indefinitely.
+ *
+ * <p>Sends an HTTP 200 response with a declared content length of 5000 bytes but only
+ * writes a single byte, simulating an incomplete response that never finishes.
+ */
 public class ResponseHeaderOnly implements HttpInstabilityBehavior, MetricsAvailable {
+
+    /**
+     * Creates a new {@code ResponseHeaderOnly} behavior instance.
+     */
+    public ResponseHeaderOnly() {
+    }
     @Override
     public void handle(HttpExchange exchange) throws InterruptedException {
         try {

@@ -23,6 +23,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+/**
+ * Mock implementation of Amazon S3 as an HTTP instability behavior.
+ *
+ * <p>Supports basic S3 operations (create/delete bucket, put/get/delete object,
+ * list buckets/objects) backed by a local filesystem directory.</p>
+ */
 public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
     private static final Logger LOG = Logger.getLogger(S3Mock.class.getName());
 
@@ -31,6 +37,9 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
     private File s3Directory;
     private String endpointHost = "localhost";
 
+    /**
+     * Constructs an S3Mock instance with a pre-configured XML mapper for S3 responses.
+     */
     public S3Mock() {
         mapper = XmlMapper.builder()
                 .addModule(new JavaTimeModule()
@@ -136,6 +145,12 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
         }
     }
 
+    /**
+     * Sets the filesystem directory used to store S3 bucket and object data.
+     *
+     * @param directory the directory to use for S3 storage; must be an existing directory
+     * @throws IllegalArgumentException if the given path is not a directory
+     */
     public void setS3Directory(File directory) {
         if (!directory.isDirectory()) {
             throw new IllegalArgumentException(directory + " is not a directory");
@@ -144,6 +159,11 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
         this.s3Directory = directory;
     }
 
+    /**
+     * Sets the endpoint hostname used for virtual-hosted-style bucket name resolution.
+     *
+     * @param endpointHost the endpoint hostname (e.g., {@code "localhost"})
+     */
     public void setEndpointHost(String endpointHost) {
         this.endpointHost = endpointHost;
     }
