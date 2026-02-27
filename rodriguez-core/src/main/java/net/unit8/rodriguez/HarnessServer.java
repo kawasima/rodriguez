@@ -7,9 +7,7 @@ import net.unit8.rodriguez.metrics.MetricRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.ServiceLoader;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -25,7 +23,7 @@ public class HarnessServer {
     private List<Runnable> servers;
     private ControlServer controlServer;
     private ExecutorService executor;
-    private FuseSupport fuseSupport;
+    private final List<HarnessExtension> activeExtensions = new ArrayList<>();
 
     public HarnessServer() {
         ConfigParser parser = new ConfigParser();
@@ -72,13 +70,23 @@ public class HarnessServer {
                 .map(entry -> createServer(entry.getValue(), entry.getKey()))
                 .collect(Collectors.toList());
 
-        if (config.getFuse() != null) {
-            ServiceLoader.load(FuseSupport.class).findFirst().ifPresent(fs -> {
-                fs.start(config.getFuse());
-                fuseSupport = fs;
-                LOG.info("FUSE support enabled");
-            });
-        }
+        Map<String, HarnessExtension> extensionMap = new HashMap<>();
+        ServiceLoader.load(HarnessExtension.class).forEach(ext -> extensionMap.put(ext.getName(), ext));
+
+        config.getExtensions().forEach((name, extConfig) -> {
+            HarnessExtension ext = extensionMap.get(name);
+            if (ext != null) {
+                try {
+                    ext.start(extConfig);
+                    activeExtensions.add(ext);
+                    LOG.info("Extension '" + name + "' enabled");
+                } catch (UnsatisfiedLinkError e) {
+                    LOG.warning("Extension '" + name + "' unavailable (native library not found). Skipping.");
+                }
+            } else {
+                LOG.warning("No extension found for '" + name + "'. Skipping.");
+            }
+        });
 
         LOG.info("rodriguez server has started");
     }
@@ -109,9 +117,8 @@ public class HarnessServer {
                 servers.forEach(Runnable::run);
             }
 
-            if (fuseSupport != null) {
-                fuseSupport.shutdown();
-            }
+            activeExtensions.forEach(HarnessExtension::shutdown);
+
             if (controlServer != null) {
                 controlServer.shutdown();
             }

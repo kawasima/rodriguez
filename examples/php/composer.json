@@ -1,0 +1,22 @@
+{
+    "name": "rodriguez/php-example",
+    "description": "Rodriguez fault injection examples for PHP",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "aws/aws-sdk-php": "^3.300"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rodriguez\\Example\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rodriguez\\Example\\Tests\\": "tests/"
+        }
+    }
+}

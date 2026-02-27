@@ -5,25 +5,27 @@
       "type": "net.unit8.rodriguez.behavior.RefuseConnection"
     }
   },
-  "fuse": {
-    "mountPath": "/tmp/rodriguez-fuse",
-    "backingPath": "/tmp/rodriguez-fuse-data",
-    "faults": [
-      {
-        "pathPattern": ".*\\.log$",
-        "operations": ["WRITE"],
-        "fault": {
-          "type": "net.unit8.rodriguez.fuse.fault.DiskFull"
+  "extensions": {
+    "fuse": {
+      "mountPath": "/tmp/rodriguez-fuse",
+      "backingPath": "/tmp/rodriguez-fuse-data",
+      "faults": [
+        {
+          "pathPattern": ".*\\.log$",
+          "operations": ["WRITE"],
+          "fault": {
+            "type": "net.unit8.rodriguez.fuse.fault.DiskFull"
+          }
+        },
+        {
+          "pathPattern": ".*\\.dat$",
+          "operations": ["READ"],
+          "fault": {
+            "type": "net.unit8.rodriguez.fuse.fault.SlowIO",
+            "delayMs": 3000
+          }
         }
-      },
-      {
-        "pathPattern": ".*\\.dat$",
-        "operations": ["READ"],
-        "fault": {
-          "type": "net.unit8.rodriguez.fuse.fault.SlowIO",
-          "delayMs": 3000
-        }
-      }
-    ]
+      ]
+    }
   }
 }

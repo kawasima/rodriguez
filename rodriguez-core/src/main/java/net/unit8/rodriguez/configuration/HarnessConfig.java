@@ -9,7 +9,7 @@ import java.util.*;
 public class HarnessConfig implements Serializable {
     private Map<Integer, InstabilityBehavior> ports;
     private Integer controlPort;
-    private JsonNode fuse;
+    private Map<String, JsonNode> extensions;
 
     public Map<Integer, InstabilityBehavior> getPorts() {
         return Objects.requireNonNullElse(ports, Collections.emptyMap());
@@ -27,12 +27,12 @@ public class HarnessConfig implements Serializable {
         this.controlPort = controlPort;
     }
 
-    public JsonNode getFuse() {
-        return fuse;
+    public Map<String, JsonNode> getExtensions() {
+        return Objects.requireNonNullElse(extensions, Collections.emptyMap());
     }
 
-    public void setFuse(JsonNode fuse) {
-        this.fuse = fuse;
+    public void setExtensions(Map<String, JsonNode> extensions) {
+        this.extensions = extensions;
     }
 
     public void merge(HarnessConfig config) {
@@ -41,8 +41,11 @@ public class HarnessConfig implements Serializable {
             ports = new HashMap<>();
         }
         ports.putAll(config.getPorts());
-        if (config.getFuse() != null) {
-            this.fuse = config.getFuse();
+        if (!config.getExtensions().isEmpty()) {
+            if (extensions == null) {
+                extensions = new HashMap<>();
+            }
+            extensions.putAll(config.getExtensions());
         }
     }
 }

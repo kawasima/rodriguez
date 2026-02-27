@@ -1,0 +1,8 @@
+services:
+  rodriguez:
+    image: kawasima/rodriguez
+    ports:
+      - "10200-10220:10200-10220"
+    volumes:
+      - ./examples/rodriguez.json:/config/rodriguez.json:ro
+    command: ["-c", "/config/rodriguez.json"]

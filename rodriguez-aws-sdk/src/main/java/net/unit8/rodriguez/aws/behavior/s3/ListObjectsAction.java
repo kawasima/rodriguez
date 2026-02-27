@@ -1,6 +1,7 @@
 package net.unit8.rodriguez.aws.behavior.s3;
 
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import net.unit8.rodriguez.aws.AWSRequest;
 
 import java.io.File;
@@ -36,6 +37,7 @@ public class ListObjectsAction extends S3ActionBase<ListObjectsAction.ListBucket
         return result;
     }
 
+    @JacksonXmlRootElement(localName = "ListBucketResult")
     public static class ListBucketResult implements Serializable {
         public boolean IsTruncated = false;
         public String Marker;

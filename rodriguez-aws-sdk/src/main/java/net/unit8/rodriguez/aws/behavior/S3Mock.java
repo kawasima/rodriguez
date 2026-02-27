@@ -12,6 +12,7 @@ import net.unit8.rodriguez.aws.behavior.s3.S3Action;
 import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -33,7 +34,7 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
     public S3Mock() {
         mapper = XmlMapper.builder()
                 .addModule(new JavaTimeModule()
-                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'hh:mm:ss.s'Z'"))))
+                        .addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))))
                 .build();
     }
 
@@ -56,9 +57,23 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
                 .orElse("");
     }
 
+    private void ensureS3Directory() {
+        if (s3Directory == null) {
+            try {
+                s3Directory = Files.createTempDirectory("rodriguez-s3").toFile();
+                s3Directory.deleteOnExit();
+                Stream.of(S3Action.values()).forEach(action -> action.setDirectory(s3Directory));
+                LOG.info("S3Mock: using temporary directory " + s3Directory);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to create temporary S3 directory", e);
+            }
+        }
+    }
+
     @Override
     public void handle(HttpExchange exchange) {
         try {
+            ensureS3Directory();
             AWSRequest request = AWSRequest.of(exchange);
             String bucketName = getBucketNameFromPath(exchange);
             boolean isPathStyleAccess = bucketName != null;
@@ -88,9 +103,9 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
             if (response instanceof ErrorResponse errorResponse) {
                 errorResponse.handle(exchange);
             } else if (response == null) {
-                exchange.getResponseHeaders().set("Content-Length", "0");
-                exchange.sendResponseHeaders(204, -1);
+                exchange.sendResponseHeaders(200, -1);
             } else if (response instanceof File f) {
+                exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
                 exchange.sendResponseHeaders(200, f.length());
                 byte[] buffer = new byte[4096];
                 try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f))) {
@@ -103,14 +118,16 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
                     }
                 }
             } else {
+                exchange.getResponseHeaders().set("Content-Type", "application/xml");
                 exchange.sendResponseHeaders(200, 0);
                 LOG.fine(mapper.writeValueAsString(response));
                 mapper.writeValue(exchange.getResponseBody(), response);
             }
         } catch (Exception e) {
+            LOG.severe("S3Mock error: " + e.getMessage());
             getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "other-error"));
             try {
-                exchange.sendResponseHeaders(500, 0);
+                exchange.sendResponseHeaders(500, -1);
             } catch(IOException ignore) {
 
             }

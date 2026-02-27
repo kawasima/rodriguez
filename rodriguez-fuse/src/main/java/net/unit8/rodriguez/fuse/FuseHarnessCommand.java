@@ -8,7 +8,7 @@ import picocli.CommandLine.Option;
 import java.io.File;
 import java.util.concurrent.Callable;
 
-@Command(name = "rodriguez-fuse", version = "0.3.0-SNAPSHOT")
+@Command(name = "rodriguez-fuse", version = "0.3.0")
 public class FuseHarnessCommand implements Callable<Integer> {
     @Option(names = {"-c", "--config"}, required = true, description = "FUSE config file")
     private File configFile;

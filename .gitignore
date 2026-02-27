@@ -44,4 +44,12 @@ buildNumber.properties
 .project
 
 # Node
-node_modules
+node_modules/
+
+# PHP
+vendor/
+composer.lock
+.phpunit.result.cache
+
+# Go
+examples/go/go.sum

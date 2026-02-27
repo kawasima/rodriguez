@@ -1,30 +1,37 @@
 package net.unit8.rodriguez.aws.behavior.s3;
 
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 import net.unit8.rodriguez.aws.AWSRequest;
 
 import java.io.Serializable;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class ListBucketsAction extends S3ActionBase<ListBucketsAction.ListBucketsOutput> {
+public class ListBucketsAction extends S3ActionBase<ListBucketsAction.ListAllMyBucketsResult> {
     @Override
-    public ListBucketsOutput handle(AWSRequest request) {
-        ListBucketsOutput result = new ListBucketsOutput();
-        result.buckets = getBucketDirectories().stream()
+    public ListAllMyBucketsResult handle(AWSRequest request) {
+        ListAllMyBucketsResult result = new ListAllMyBucketsResult();
+        result.Buckets = getBucketDirectories().stream()
                 .map(f -> {
                     Bucket bucket = new Bucket();
                     bucket.Name = f.getName();
-                    bucket.CreationDate = LocalDateTime.ofEpochSecond(f.lastModified(), 0, ZoneOffset.UTC);
+                    bucket.CreationDate = LocalDateTime.ofInstant(Instant.ofEpochMilli(f.lastModified()), ZoneOffset.UTC);
                     return bucket;
                 })
                 .collect(Collectors.toList());
         return result;
     }
 
-    public static class ListBucketsOutput implements Serializable {
-        public List<Bucket> buckets;
+    @JacksonXmlRootElement(localName = "ListAllMyBucketsResult")
+    public static class ListAllMyBucketsResult implements Serializable {
+        @JacksonXmlElementWrapper(localName = "Buckets")
+        @JacksonXmlProperty(localName = "Bucket")
+        public List<Bucket> Buckets;
     }
 
     public static class Bucket implements Serializable {

@@ -37,13 +37,11 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
 
     @Override
     public Integer call() throws Exception {
-        HarnessServer server;
-        ConfigParser parser = new ConfigParser();
+        HarnessServer server = new HarnessServer();
         if (configFile != null && configFile.exists()) {
+            ConfigParser parser = new ConfigParser();
             HarnessConfig config = parser.parse(configFile);
-            server = new HarnessServer(config);
-        } else {
-            server = new HarnessServer();
+            server.getConfig().merge(config);
         }
         ExecutorService executor = Executors.newCachedThreadPool();
         server.start(executor);
