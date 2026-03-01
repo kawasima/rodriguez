@@ -112,11 +112,11 @@ server.start();
 {
   "ports": {
     "10213": {
-      "type": "net.unit8.rodriguez.aws.behavior.S3Mock",
+      "type": "S3Mock",
       "s3Directory": "/tmp/s3-data"
     },
     "10214": {
-      "type": "net.unit8.rodriguez.aws.behavior.SQSMock"
+      "type": "SQSMock"
     }
   }
 }

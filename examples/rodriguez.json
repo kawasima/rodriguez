@@ -2,7 +2,7 @@
   "controlPort": 10200,
   "ports": {
     "10201": {
-      "type": "net.unit8.rodriguez.behavior.RefuseConnection"
+      "type": "RefuseConnection"
     }
   },
   "extensions": {
@@ -14,14 +14,14 @@
           "pathPattern": ".*\\.log$",
           "operations": ["WRITE"],
           "fault": {
-            "type": "net.unit8.rodriguez.fuse.fault.DiskFull"
+            "type": "DiskFull"
           }
         },
         {
           "pathPattern": ".*\\.dat$",
           "operations": ["READ"],
           "fault": {
-            "type": "net.unit8.rodriguez.fuse.fault.SlowIO",
+            "type": "SlowIO",
             "delayMs": 3000
           }
         }

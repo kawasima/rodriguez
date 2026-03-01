@@ -1,6 +1,7 @@
 package net.unit8.rodriguez;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.annotation.JsonTypeIdResolver;
 
 import java.util.concurrent.Executor;
 
@@ -9,9 +10,10 @@ import java.util.concurrent.Executor;
  *
  * <p>Each implementation defines a specific instability pattern (e.g., connection refusal,
  * slow response) that can be bound to a port. Uses Jackson {@code @JsonTypeInfo} for
- * polymorphic JSON deserialization based on the {@code type} class name.
+ * polymorphic JSON deserialization based on the {@code type} short name.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "type")
+@JsonTypeInfo(use = JsonTypeInfo.Id.CUSTOM, property = "type")
+@JsonTypeIdResolver(InstabilityBehaviorTypeIdResolver.class)
 public interface InstabilityBehavior {
     /**
      * Returns whether this behavior should create a listening server socket.

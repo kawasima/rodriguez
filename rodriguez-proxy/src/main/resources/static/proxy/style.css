@@ -1,0 +1,273 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+
+header {
+    background: #16213e;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid #0f3460;
+}
+
+header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #e94560;
+}
+
+#upstream-url {
+    font-size: 13px;
+    color: #8892b0;
+    font-family: monospace;
+}
+
+main {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    height: calc(100vh - 57px);
+}
+
+h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8892b0;
+    margin-bottom: 12px;
+}
+
+/* Fault Cards Panel */
+#fault-cards {
+    background: #16213e;
+    padding: 16px;
+    border-right: 1px solid #0f3460;
+    overflow-y: auto;
+}
+
+.fault-card {
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    border-left: 3px solid #e94560;
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: grab;
+    transition: all 0.15s;
+}
+
+.fault-card:hover {
+    background: #0f3460;
+    border-left-color: #ff6b6b;
+}
+
+.fault-card:active {
+    cursor: grabbing;
+}
+
+.fault-card .name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.fault-card .port {
+    font-size: 11px;
+    color: #8892b0;
+    font-family: monospace;
+    margin-top: 2px;
+}
+
+.fault-card .desc {
+    font-size: 11px;
+    color: #6c7a95;
+    margin-top: 4px;
+}
+
+/* Paths Panel */
+#paths-panel {
+    display: grid;
+    grid-template-rows: 1fr 240px;
+}
+
+#paths-section {
+    padding: 16px;
+    overflow-y: auto;
+    border-bottom: 1px solid #0f3460;
+}
+
+.path-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px dashed transparent;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    transition: all 0.15s;
+}
+
+.path-row.drag-over {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.path-row .pattern {
+    font-family: monospace;
+    font-size: 13px;
+    color: #ccd6f6;
+    flex: 1;
+}
+
+.rule-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e94560;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.rule-badge:hover {
+    background: #ff6b6b;
+}
+
+.rule-badge .count {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0 4px;
+    border-radius: 6px;
+    font-size: 10px;
+}
+
+#add-path {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+#custom-path-input {
+    flex: 1;
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+#add-path-btn {
+    background: #0f3460;
+    color: #e0e0e0;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#add-path-btn:hover {
+    background: #e94560;
+}
+
+/* Events Panel */
+#events-section {
+    padding: 16px;
+    overflow-y: auto;
+    background: #0d1117;
+}
+
+.event-entry {
+    font-size: 12px;
+    font-family: monospace;
+    padding: 3px 0;
+    color: #8892b0;
+    border-bottom: 1px solid #161b22;
+}
+
+.event-entry .time {
+    color: #6c7a95;
+}
+
+.event-entry.rule-added .msg {
+    color: #3fb950;
+}
+
+.event-entry.rule-consumed .msg {
+    color: #d29922;
+}
+
+.event-entry.rule-removed .msg {
+    color: #e94560;
+}
+
+.event-entry.path-observed .msg {
+    color: #58a6ff;
+}
+
+/* Dialog */
+dialog {
+    background: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    padding: 24px;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+}
+
+dialog p {
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+dialog input {
+    width: 100%;
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    color: #e0e0e0;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.dialog-buttons button {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.dialog-buttons button[value="cancel"] {
+    background: #0f3460;
+    color: #e0e0e0;
+}
+
+.dialog-buttons button[value="confirm"] {
+    background: #e94560;
+    color: #fff;
+}

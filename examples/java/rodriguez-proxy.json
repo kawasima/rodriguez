@@ -1,0 +1,12 @@
+{
+  "controlPort": 10200,
+  "extensions": {
+    "proxy": {
+      "port": 10220,
+      "upstream": "http://host.docker.internal:8080",
+      "paths": [
+        "/api/greet"
+      ]
+    }
+  }
+}

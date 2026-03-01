@@ -10,6 +10,7 @@ Each language demonstrates how cloud SDKs (AWS, GCP) behave under various timeou
 | [nodejs/](nodejs/) | Node.js 18+ | vitest | AWS SDK v3 (`@aws-sdk/client-s3`, `@aws-sdk/client-sqs`), GCP (`@google-cloud/storage`) | 43 |
 | [go/](go/) | Go 1.21+ | `go test` | AWS SDK for Go v2 (`aws-sdk-go-v2`) | 27 |
 | [php/](php/) | PHP 8.1+ | PHPUnit | AWS SDK for PHP (`aws/aws-sdk-php` + Guzzle/cURL) | 33 |
+| [java/](java/) | Java 21+ | Spring Boot demo | HTTP client via Rodriguez proxy | - |
 
 ## Getting Started
 
@@ -21,6 +22,7 @@ docker compose up -d
 cd examples/nodejs && npm install && npm test
 cd examples/go && go test -v -count=1 -timeout 120s ./...
 cd examples/php && composer install && vendor/bin/phpunit --testdox
+cd examples/java && mvn package
 ```
 
 ## Cloud SDK Timeout Pitfalls: Cross-SDK Comparison

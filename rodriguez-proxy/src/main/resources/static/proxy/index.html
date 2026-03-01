@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rodriguez Proxy Dashboard</title>
+    <link rel="stylesheet" href="/_proxy/ui/style.css">
+</head>
+<body>
+    <header>
+        <h1>Rodriguez Proxy Dashboard</h1>
+        <span id="upstream-url"></span>
+    </header>
+    <main>
+        <section id="fault-cards">
+            <h2>Fault Cards</h2>
+            <div id="cards-container"></div>
+        </section>
+        <section id="paths-panel">
+            <div id="paths-section">
+                <h2>Paths &amp; Active Rules</h2>
+                <div id="paths-container"></div>
+                <div id="add-path">
+                    <input type="text" id="custom-path-input" placeholder="/api/.*">
+                    <button id="add-path-btn">Add Path</button>
+                </div>
+            </div>
+            <div id="events-section">
+                <h2>Event Log</h2>
+                <div id="events-container"></div>
+            </div>
+        </section>
+    </main>
+<script src="/_proxy/ui/app.js"></script>
+</body>
+</html>

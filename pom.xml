@@ -30,6 +30,7 @@
         <module>rodriguez-aws-sdk</module>
         <module>rodriguez-gcp</module>
         <module>rodriguez-fuse</module>
+        <module>rodriguez-proxy</module>
         <module>rodriguez-build</module>
     </modules>
 

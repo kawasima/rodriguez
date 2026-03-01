@@ -1,7 +1,7 @@
 # Rodriguez
 
 A test harness tool that adheres to the "Release It!" failure patterns.
-It simulates various infrastructure failures (network, HTTP, JDBC, filesystem, AWS services)
+It simulates various infrastructure failures (network, HTTP, JDBC, filesystem, AWS/GCP services)
 on different ports from a single process.
 
 ## Failure Patterns
@@ -30,7 +30,9 @@ Consider using [toxiproxy](https://github.com/Shopify/toxiproxy) or Linux traffi
 | rodriguez-core | Core framework: socket/HTTP behaviors, control server, configuration, metrics |
 | rodriguez-jdbc | JDBC driver mock with CSV-based fixtures and configurable query delays |
 | rodriguez-aws-sdk | S3 and SQS service mocks for AWS SDK testing |
+| rodriguez-gcp | GCS mock for Google Cloud Storage testing |
 | rodriguez-fuse | FUSE filesystem fault injection (SlowIO, DiskFull, CorruptedRead, etc.) |
+| rodriguez-proxy | Fault-injecting reverse proxy with drag-and-drop web UI |
 | rodriguez-build | Aggregates all modules for Docker and native image packaging |
 
 ## Multiple Port Support
@@ -44,10 +46,10 @@ You can map a port to a failure pattern with the following configuration.
 {
   "ports": {
     "10201": {
-      "type": "net.unit8.rodriguez.behavior.NotAccept"
+      "type": "NotAccept"
     },
     "10202": {
-      "type": "net.unit8.rodriguez.behavior.SlowResponse",
+      "type": "SlowResponse",
       "interval": 3000
     }
   }
@@ -118,6 +120,15 @@ curl http://localhost:10200/config | jq
 
 ### Display Metrics
 
+Each behavior automatically records request-level counters. You can use these metrics to verify that your client retried the expected number of times, or that timeouts occurred as expected.
+
+| Metric suffix | Description |
+| --- | --- |
+| `call` | Total number of connections/requests received |
+| `handle-complete` | Responses sent successfully |
+| `client-timeout` | Client disconnected (broken pipe) |
+| `other-error` | Other I/O errors |
+
 ```
 curl http://localhost:10200/metrics | jq
 ```
@@ -134,6 +145,8 @@ Example response:
   }
 }
 ```
+
+For example, if your HTTP client is configured with 3 retries and a 5-second timeout against SlowResponse (port 10205), you can assert that `net.unit8.rodriguez.behavior.SlowResponse.call` equals 3 and `net.unit8.rodriguez.behavior.SlowResponse.client-timeout` equals 3 after the test.
 
 ### Shutdown
 
@@ -162,6 +175,8 @@ curl -XPOST http://localhost:10200/shutdown
 | 10212 | RefuseAuthentication | HTTP |
 | 10213 | S3Mock | AWS |
 | 10214 | SQSMock | AWS |
+| 10215 | GCSMock | GCP |
+| 10220 | Fault-Injecting Reverse Proxy | Extension |
 
 ### RefuseConnection
 
@@ -309,6 +324,20 @@ A mock SQS service with in-memory queue management. Supports both AWS Query prot
 - CreateQueue / DeleteQueue / GetQueueUrl
 - SendMessage / ReceiveMessage / DeleteMessage
 
+### GCSMock (GCP)
+
+Default port: 10215
+
+A mock Google Cloud Storage service backed by the local filesystem.
+Uses the GCS JSON API v1 (`/storage/v1/b/...`, `/upload/storage/v1/b/...`).
+
+- CreateBucket / DeleteBucket / ListBuckets
+- UploadObject / GetObject / GetObjectMetadata / DeleteObject / ListObjects
+
+| Property | Description | Default |
+| --- | --- | --- |
+| gcsDirectory | Backing directory for bucket storage | (temp directory) |
+
 ## FUSE Extension
 
 The FUSE extension injects file I/O faults at the filesystem level using a virtual FUSE mount.
@@ -326,14 +355,14 @@ Configure it via the `extensions` section:
           "pathPattern": ".*\\.log$",
           "operations": ["WRITE"],
           "fault": {
-            "type": "net.unit8.rodriguez.fuse.fault.DiskFull"
+            "type": "DiskFull"
           }
         },
         {
           "pathPattern": ".*\\.dat$",
           "operations": ["READ"],
           "fault": {
-            "type": "net.unit8.rodriguez.fuse.fault.SlowIO",
+            "type": "SlowIO",
             "delayMs": 3000
           }
         }
@@ -347,12 +376,63 @@ Available fault types: DiskFull, SlowIO, FileNotFound, PermissionDenied, ReadOnl
 
 Available operations: READ, WRITE, OPEN, CREATE, TRUNCATE, FSYNC, FLUSH, MKDIR, UNLINK, RMDIR, RENAME, CHMOD, CHOWN.
 
+## Reverse Proxy Extension
+
+The reverse proxy extension injects faults into live traffic by forwarding matching requests to Rodriguez fault ports instead of the upstream service. It provides a drag-and-drop web UI for one-shot fault injection.
+
+Configure it via the `extensions` section:
+
+```json
+{
+  "extensions": {
+    "proxy": {
+      "port": 10220,
+      "upstream": "http://localhost:8080",
+      "paths": ["/api/", "/web/"],
+      "connectTimeoutMs": 5000,
+      "requestTimeoutMs": 30000
+    }
+  }
+}
+```
+
+| Property | Description | Default |
+| --- | --- | --- |
+| port | Proxy listen port | 10220 |
+| upstream | Upstream service URL to forward requests to | (required) |
+| paths | Path patterns shown in the UI | [] |
+| connectTimeoutMs | Upstream connection timeout in milliseconds | 5000 |
+| requestTimeoutMs | Upstream request timeout in milliseconds | 30000 |
+
+### Web UI
+
+Open `http://localhost:10220/_proxy/ui/` to access the dashboard. Drag a fault card (e.g., SlowResponse) onto a path, specify how many requests to inject, and the proxy will forward that many matching requests to the Rodriguez fault port. The fault rule is automatically removed once consumed.
+
+### Proxy REST API
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/_proxy/api/rules` | List active fault rules |
+| POST | `/_proxy/api/rules` | Create a rule |
+| DELETE | `/_proxy/api/rules/{id}` | Remove a rule |
+| GET | `/_proxy/api/behaviors` | List available fault behaviors |
+
+Create a rule example:
+
+```bash
+curl -X POST http://localhost:10220/_proxy/api/rules \
+  -H 'Content-Type: application/json' \
+  -d '{"pathPattern":"/api/.*","faultType":"SlowResponse","faultPort":10205,"count":3}'
+```
+
+The proxy also provides a real-time event stream at `/_proxy/events` (Server-Sent Events) for rule lifecycle notifications.
+
 ## Examples
 
-The [examples](examples/) directory contains multi-language test suites that demonstrate how to test applications against Rodriguez, including AWS SDK timeout behavior across languages.
+The [examples](examples/) directory contains multi-language test suites that demonstrate how to test applications against Rodriguez, including cloud SDK timeout behavior across languages.
 
-- [Node.js](examples/nodejs/) — vitest + AWS SDK v3
+- [Node.js](examples/nodejs/) — vitest + AWS SDK v3 + `@google-cloud/storage`
 - [Go](examples/go/) — go test + AWS SDK v2
 - [PHP](examples/php/) — PHPUnit + AWS SDK for PHP
 
-See [examples/README.md](examples/README.md) for a cross-language comparison of AWS SDK timeout pitfalls.
+See [examples/README.md](examples/README.md) for a cross-language comparison of cloud SDK timeout pitfalls.

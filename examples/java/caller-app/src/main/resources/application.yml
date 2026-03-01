@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: caller-app
+
+server:
+  port: 8081
+
+app:
+  receiver:
+    base-url: http://localhost:10220

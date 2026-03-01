@@ -39,14 +39,14 @@ FaultInjectionFS (passthrough + fault injection)
       "pathPattern": ".*\\.log$",
       "operations": ["WRITE", "FSYNC"],
       "fault": {
-        "type": "net.unit8.rodriguez.fuse.fault.DiskFull"
+        "type": "DiskFull"
       }
     },
     {
       "pathPattern": ".*",
       "operations": ["READ"],
       "fault": {
-        "type": "net.unit8.rodriguez.fuse.fault.SlowIO",
+        "type": "SlowIO",
         "delayMs": 3000
       }
     }

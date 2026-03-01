@@ -1,0 +1,14 @@
+{
+  "controlPort": 10200,
+  "ports": {
+    "10201": {
+      "type": "RefuseConnection"
+    }
+  },
+  "extensions": {
+    "proxy": {
+      "port": 10220,
+      "upstream": "http://localhost:8080"
+    }
+  }
+}

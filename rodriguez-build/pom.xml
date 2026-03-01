@@ -74,6 +74,11 @@
             <artifactId>rodriguez-fuse</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>net.unit8.rodriguez</groupId>
+            <artifactId>rodriguez-proxy</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <profiles>
