@@ -163,6 +163,10 @@ public class FaultRule {
                 default -> Duration.parse(s);
             };
         }
-        return Duration.parse(s);
+        try {
+            return Duration.parse(s);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new IllegalArgumentException("Invalid duration: " + s, e);
+        }
     }
 }

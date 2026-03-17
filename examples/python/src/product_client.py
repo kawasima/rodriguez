@@ -1,3 +1,5 @@
+import json
+
 import requests
 
 
@@ -41,24 +43,27 @@ class ProductClient:
         except requests.exceptions.ConnectionError as e:
             raise ProductApiError(f"Connection failed: {e}", code="CONNECTION_ERROR")
 
-        if response.status_code == 401:
-            raise ProductApiError("Authentication failed", code="UNAUTHORIZED", status=401)
-
-        if not response.ok:
-            raise ProductApiError(f"HTTP {response.status_code}", code="HTTP_ERROR", status=response.status_code)
-
-        content_type = response.headers.get("content-type", "")
-        body = self._read_body_with_limit(response)
-
-        if "application/json" not in content_type:
-            raise ProductApiError(
-                f"Unexpected content type: {content_type}", code="INVALID_CONTENT_TYPE"
-            )
-
         try:
-            return response.json()
-        except ValueError:
-            raise ProductApiError("Invalid JSON in response body", code="INVALID_JSON")
+            if response.status_code == 401:
+                raise ProductApiError("Authentication failed", code="UNAUTHORIZED", status=401)
+
+            if not response.ok:
+                raise ProductApiError(f"HTTP {response.status_code}", code="HTTP_ERROR", status=response.status_code)
+
+            content_type = response.headers.get("content-type", "")
+            body = self._read_body_with_limit(response)
+
+            if "application/json" not in content_type:
+                raise ProductApiError(
+                    f"Unexpected content type: {content_type}", code="INVALID_CONTENT_TYPE"
+                )
+
+            try:
+                return json.loads(body)
+            except (ValueError, json.JSONDecodeError):
+                raise ProductApiError("Invalid JSON in response body", code="INVALID_JSON")
+        finally:
+            response.close()
 
     def _read_body_with_limit(self, response):
         total = 0

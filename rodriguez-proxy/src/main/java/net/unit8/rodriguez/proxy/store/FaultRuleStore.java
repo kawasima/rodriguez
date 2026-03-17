@@ -142,9 +142,14 @@ public class FaultRuleStore {
         List<FaultRule> result = new ArrayList<>();
         for (String id : ruleOrder) {
             FaultRule rule = rules.get(id);
-            if (rule != null) {
-                result.add(rule);
+            if (rule == null) continue;
+            if (rule.isExpired()) {
+                rules.remove(id);
+                ruleOrder.remove(id);
+                listeners.forEach(l -> l.onRuleRemoved(rule));
+                continue;
             }
+            result.add(rule);
         }
         return Collections.unmodifiableList(result);
     }

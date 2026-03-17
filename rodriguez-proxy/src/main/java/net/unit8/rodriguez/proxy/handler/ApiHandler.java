@@ -16,7 +16,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -133,6 +136,13 @@ public class ApiHandler implements HttpHandler {
 
         String pathPattern = (String) json.get("pathPattern");
         String faultType = (String) json.get("faultType");
+
+        if (pathPattern == null || pathPattern.isEmpty() || faultType == null || faultType.isEmpty()) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(
+                    Map.of("error", "pathPattern and faultType are required")));
+            return;
+        }
+
         int count = json.containsKey("count") ? ((Number) json.get("count")).intValue() : 1;
 
         int faultPort;
@@ -149,7 +159,14 @@ public class ApiHandler implements HttpHandler {
         }
 
         String duration = (String) json.get("duration");
-        FaultRule rule = new FaultRule(pathPattern, faultType, faultPort, count, duration);
+        FaultRule rule;
+        try {
+            rule = new FaultRule(pathPattern, faultType, faultPort, count, duration);
+        } catch (IllegalArgumentException e) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(
+                    Map.of("error", "Invalid duration: " + duration + " (use e.g. \"30s\", \"5m\", \"1h\")")));
+            return;
+        }
         store.addRule(rule);
 
         sendJson(exchange, 201, mapper.writeValueAsBytes(ruleToMap(rule)));

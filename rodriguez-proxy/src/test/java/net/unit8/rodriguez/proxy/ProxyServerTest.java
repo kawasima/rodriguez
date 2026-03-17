@@ -361,9 +361,9 @@ class ProxyServerTest {
 
     @Test
     void ruleExpiresAfterDuration() throws Exception {
-        // Create a rule with 1-second TTL
+        // Create a rule with 1-second TTL matching /api/hello
         Map<String, Object> ruleMap = new LinkedHashMap<>();
-        ruleMap.put("pathPattern", "/api/ttl-test");
+        ruleMap.put("pathPattern", "/api/hello");
         ruleMap.put("faultType", "SlowResponse");
         ruleMap.put("faultPort", FAULT_PORT);
         ruleMap.put("count", 100);
@@ -381,8 +381,26 @@ class ProxyServerTest {
         JsonNode created = mapper.readTree(createResponse.body());
         assertThat(created.get("duration").asText()).isEqualTo("PT1S");
 
+        // Before expiry — rule should be listed as active
+        HttpResponse<String> listBefore = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(mapper.readTree(listBefore.body())).isNotEmpty();
+
         // Wait for expiry
         Thread.sleep(1500);
+
+        // After expiry — rule should be purged from the list
+        HttpResponse<String> listAfter = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(mapper.readTree(listAfter.body())).isEmpty();
 
         // Request should go to upstream (rule expired), not to fault port
         HttpResponse<String> response = httpClient.send(
