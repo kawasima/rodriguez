@@ -101,7 +101,14 @@ public class FaultRuleStore {
     public Optional<FaultRule> findAndConsume(String path) {
         for (String id : ruleOrder) {
             FaultRule rule = rules.get(id);
-            if (rule != null && rule.matches(path)) {
+            if (rule == null) continue;
+            if (rule.isExpired()) {
+                rules.remove(id);
+                ruleOrder.remove(id);
+                listeners.forEach(l -> l.onRuleRemoved(rule));
+                continue;
+            }
+            if (rule.matches(path)) {
                 int remaining = rule.decrementAndGet();
                 if (remaining <= 0) {
                     rules.remove(id);
@@ -114,6 +121,16 @@ public class FaultRuleStore {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Removes all fault rules from the store.
+     */
+    public void clearAll() {
+        List<FaultRule> removed = new ArrayList<>(rules.values());
+        rules.clear();
+        ruleOrder.clear();
+        removed.forEach(rule -> listeners.forEach(l -> l.onRuleRemoved(rule)));
     }
 
     /**

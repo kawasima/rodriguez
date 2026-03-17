@@ -30,8 +30,8 @@ mvn test -pl rodriguez-core -Dtest=HarnessServerTest
 # Run the harness locally
 mvn exec:java -pl rodriguez-build
 
-# Build Docker image
-mvn jib:dockerBuild -pl rodriguez-build
+# Build Docker image (install first to update ~/.m2 for Jib)
+mvn install -DskipTests && mvn jib:dockerBuild -pl rodriguez-build
 
 # Build GraalVM native image (requires GraalVM 21 JDK)
 mvn -Pgraalvm package
@@ -117,7 +117,7 @@ git checkout master && git merge develop
 git tag v0.4.0
 
 # 4. Build and push Docker image
-mvn jib:dockerBuild -pl rodriguez-build
+mvn install -DskipTests && mvn jib:dockerBuild -pl rodriguez-build
 # → kawasima/rodriguez:latest + kawasima/rodriguez:0.4.0
 
 # 5. Push

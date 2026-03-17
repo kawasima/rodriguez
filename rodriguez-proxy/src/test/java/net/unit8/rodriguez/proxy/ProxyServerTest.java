@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -263,5 +264,135 @@ class ProxyServerTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(204);
+    }
+
+    // ---- API: faultType-only rule creation ----
+
+    @Test
+    void createRuleWithFaultTypeOnly() throws Exception {
+        String ruleBody = mapper.writeValueAsString(Map.of(
+                "pathPattern", "/api/auto-resolve",
+                "faultType", "SlowResponse",
+                "count", 1));
+
+        HttpResponse<String> createResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(ruleBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(createResponse.statusCode()).isEqualTo(201);
+        JsonNode created = mapper.readTree(createResponse.body());
+        assertThat(created.get("faultType").asText()).isEqualTo("SlowResponse");
+        assertThat(created.get("faultPort").asInt()).isEqualTo(FAULT_PORT);
+
+        // Cleanup
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules/" + created.get("id").asText()))
+                        .DELETE()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void createRuleWithUnknownFaultTypeReturns400() throws Exception {
+        String ruleBody = mapper.writeValueAsString(Map.of(
+                "pathPattern", "/api/unknown",
+                "faultType", "NonExistentBehavior",
+                "count", 1));
+
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(ruleBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        JsonNode json = mapper.readTree(response.body());
+        assertThat(json.get("error").asText()).contains("NonExistentBehavior");
+    }
+
+    // ---- API: bulk clear ----
+
+    @Test
+    void clearAllRules() throws Exception {
+        // Create two rules
+        for (String path : new String[]{"/api/clear-1", "/api/clear-2"}) {
+            httpClient.send(
+                    HttpRequest.newBuilder()
+                            .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(Map.of(
+                                    "pathPattern", path,
+                                    "faultType", "SlowResponse",
+                                    "faultPort", FAULT_PORT,
+                                    "count", 10))))
+                            .build(),
+                    HttpResponse.BodyHandlers.ofString());
+        }
+
+        // Clear all
+        HttpResponse<String> deleteResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .DELETE()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(deleteResponse.statusCode()).isEqualTo(204);
+
+        // Verify empty
+        HttpResponse<String> listResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        JsonNode rules = mapper.readTree(listResponse.body());
+        assertThat(rules).isEmpty();
+    }
+
+    // ---- API: TTL duration ----
+
+    @Test
+    void ruleExpiresAfterDuration() throws Exception {
+        // Create a rule with 1-second TTL
+        Map<String, Object> ruleMap = new LinkedHashMap<>();
+        ruleMap.put("pathPattern", "/api/ttl-test");
+        ruleMap.put("faultType", "SlowResponse");
+        ruleMap.put("faultPort", FAULT_PORT);
+        ruleMap.put("count", 100);
+        ruleMap.put("duration", "1s");
+
+        HttpResponse<String> createResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(ruleMap)))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(createResponse.statusCode()).isEqualTo(201);
+        JsonNode created = mapper.readTree(createResponse.body());
+        assertThat(created.get("duration").asText()).isEqualTo("PT1S");
+
+        // Wait for expiry
+        Thread.sleep(1500);
+
+        // Request should go to upstream (rule expired), not to fault port
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/api/hello"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(mapper.readTree(response.body()).get("message").asText()).isEqualTo("hello");
     }
 }

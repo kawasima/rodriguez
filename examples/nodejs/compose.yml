@@ -1,0 +1,19 @@
+services:
+  upstream:
+    image: node:22-slim
+    working_dir: /app
+    init: true
+    volumes:
+      - ./src:/app/src:ro
+      - ./package.json:/app/package.json:ro
+    command: ["node", "src/upstream-server.js", "8080"]
+
+  rodriguez:
+    image: kawasima/rodriguez
+    ports:
+      - "10200-10220:10200-10220"
+    volumes:
+      - ./rodriguez-proxy.json:/config/rodriguez.json:ro
+    command: ["-c", "/config/rodriguez.json"]
+    depends_on:
+      - upstream
