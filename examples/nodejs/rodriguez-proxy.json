@@ -1,0 +1,16 @@
+{
+  "controlPort": 10200,
+  "ports": {
+    "10201": { "type": "RefuseConnection" },
+    "10205": { "type": "SlowResponse" },
+    "10208": { "type": "BrokenJson" },
+    "10212": { "type": "RefuseAuthentication" }
+  },
+  "extensions": {
+    "proxy": {
+      "port": 10220,
+      "upstream": "http://upstream:8080",
+      "paths": ["/products/.*"]
+    }
+  }
+}

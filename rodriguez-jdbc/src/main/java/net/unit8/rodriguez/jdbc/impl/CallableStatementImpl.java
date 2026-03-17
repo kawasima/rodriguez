@@ -859,12 +859,12 @@ public class CallableStatementImpl extends StatementImpl implements CallableStat
     }
 
     public boolean isWrapperFor(Class<?> iface) throws java.sql.SQLException {
-        // TODO Auto-generated method stub
+
         return iface != null && iface.isAssignableFrom(this.getClass());
     }
 
     public <T> T unwrap(Class<T> iface) throws java.sql.SQLException {
-        // TODO Auto-generated method stub
+
         try {
             if (iface != null && iface.isAssignableFrom(this.getClass())) {
                 return (T) this;
@@ -876,11 +876,11 @@ public class CallableStatementImpl extends StatementImpl implements CallableStat
     }
 
     public void closeOnCompletion() {
-        // TODO Auto-generated method stub
+
     }
 
     public boolean isCloseOnCompletion() {
-        // TODO Auto-generated method stub
+
         return false;
     }
 }

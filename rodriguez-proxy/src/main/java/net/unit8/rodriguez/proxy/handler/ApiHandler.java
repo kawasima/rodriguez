@@ -16,29 +16,32 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * REST API handler for managing fault injection rules.
  *
  * <p>Endpoints:
  * <ul>
- *   <li>GET  /_proxy/api/rules      — list active rules</li>
- *   <li>POST /_proxy/api/rules      — create a rule</li>
- *   <li>DELETE /_proxy/api/rules/{id} — remove a rule</li>
- *   <li>GET  /_proxy/api/behaviors  — list available fault behaviors (from control API)</li>
- *   <li>GET  /_proxy/api/paths      — list observed paths (HTTP 200-399)</li>
+ *   <li>GET    /_proxy/api/rules        — list active rules</li>
+ *   <li>POST   /_proxy/api/rules        — create a rule (faultPort is optional; resolved from faultType)</li>
+ *   <li>DELETE /_proxy/api/rules         — remove all rules</li>
+ *   <li>DELETE /_proxy/api/rules/{id}    — remove a rule by ID</li>
+ *   <li>GET    /_proxy/api/behaviors     — list available fault behaviors (from control API)</li>
+ *   <li>GET    /_proxy/api/paths         — list observed paths (HTTP 200-399)</li>
  * </ul>
  */
 public class ApiHandler implements HttpHandler {
+    private static final Logger LOG = Logger.getLogger(ApiHandler.class.getName());
     private final ObjectMapper mapper = new ObjectMapper();
     private final FaultRuleStore store;
     private final ProxyConfig config;
     private final ObservedPathStore observedPathStore;
     private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final Map<String, Integer> behaviorPortCache = new ConcurrentHashMap<>();
 
     /**
      * Creates a new API handler.
@@ -76,6 +79,8 @@ public class ApiHandler implements HttpHandler {
                         handleListRules(exchange);
                     } else if ("POST".equals(method)) {
                         handleCreateRule(exchange);
+                    } else if ("DELETE".equals(method)) {
+                        handleClearAllRules(exchange);
                     } else {
                         exchange.sendResponseHeaders(405, -1);
                     }
@@ -128,13 +133,31 @@ public class ApiHandler implements HttpHandler {
 
         String pathPattern = (String) json.get("pathPattern");
         String faultType = (String) json.get("faultType");
-        int faultPort = ((Number) json.get("faultPort")).intValue();
         int count = json.containsKey("count") ? ((Number) json.get("count")).intValue() : 1;
 
-        FaultRule rule = new FaultRule(pathPattern, faultType, faultPort, count);
+        int faultPort;
+        if (json.containsKey("faultPort")) {
+            faultPort = ((Number) json.get("faultPort")).intValue();
+        } else {
+            Integer resolved = resolveFaultPort(faultType);
+            if (resolved == null) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(
+                        Map.of("error", "Unknown faultType: " + faultType)));
+                return;
+            }
+            faultPort = resolved;
+        }
+
+        String duration = (String) json.get("duration");
+        FaultRule rule = new FaultRule(pathPattern, faultType, faultPort, count, duration);
         store.addRule(rule);
 
         sendJson(exchange, 201, mapper.writeValueAsBytes(ruleToMap(rule)));
+    }
+
+    private void handleClearAllRules(HttpExchange exchange) throws IOException {
+        store.clearAll();
+        exchange.sendResponseHeaders(204, -1);
     }
 
     private void handleDeleteRule(HttpExchange exchange, String ruleId) throws IOException {
@@ -180,6 +203,33 @@ public class ApiHandler implements HttpHandler {
         sendJson(exchange, 200, mapper.writeValueAsBytes(observedPathStore.getPaths()));
     }
 
+    private Integer resolveFaultPort(String faultType) {
+        Integer cached = behaviorPortCache.get(faultType);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(config.getControlUrl() + "/config"))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            JsonNode ports = mapper.readTree(response.body()).get("ports");
+            if (ports != null) {
+                ports.fields().forEachRemaining(entry -> {
+                    String type = entry.getValue().path("type").asText();
+                    behaviorPortCache.put(type, Integer.parseInt(entry.getKey()));
+                });
+            }
+        } catch (IOException | InterruptedException e) {
+            LOG.log(Level.WARNING, "Failed to fetch behaviors from control API", e);
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return behaviorPortCache.get(faultType);
+    }
+
     private Map<String, Object> ruleToMap(FaultRule rule) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", rule.getId());
@@ -187,6 +237,9 @@ public class ApiHandler implements HttpHandler {
         map.put("faultType", rule.getFaultType());
         map.put("faultPort", rule.getFaultPort());
         map.put("remaining", rule.getRemaining());
+        if (rule.getDuration() != null) {
+            map.put("duration", rule.getDuration().toString());
+        }
         return map;
     }
 

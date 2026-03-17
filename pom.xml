@@ -14,12 +14,12 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <github.global.server>github</github.global.server>
-        <junit.version>5.11.4</junit.version>
+        <junit.version>5.14.3</junit.version>
         <assertj.version>3.27.7</assertj.version>
         <picocli.version>4.7.7</picocli.version>
         <jackson.version>2.21.1</jackson.version>
         <failsafe.version>3.3.2</failsafe.version>
-        <hikaricp.version>6.2.1</hikaricp.version>
+        <hikaricp.version>6.3.3</hikaricp.version>
         <slf4j.version>2.0.17</slf4j.version>
         <jsqlparser.version>4.9</jsqlparser.version>
     </properties>

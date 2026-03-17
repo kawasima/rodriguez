@@ -107,10 +107,10 @@ public class TypeConverter {
      * Converts a string to a byte array.
      *
      * @param s the string to convert
-     * @return the byte array, or {@code null} (not yet implemented)
+     * @return the byte array in UTF-8 encoding
      */
     public static byte[] toBytes(String s) {
-        return null; // FIXME
+        return s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     /**
