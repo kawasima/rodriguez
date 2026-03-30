@@ -177,7 +177,7 @@ curl -XPOST http://localhost:10200/shutdown
 | 10214 | SQSMock | AWS |
 | 10215 | GCSMock | GCP |
 | 10216 | HalfClose | Socket |
-| 10217 | HalfClose (headers only) | Socket |
+| 10217 | HalfClose (truncated body) | Socket |
 | 10220 | Fault-Injecting Reverse Proxy | Extension |
 
 ### RefuseConnection

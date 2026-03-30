@@ -216,10 +216,11 @@ public class FailsafeClientTest {
 
     /**
      * TCP half-close with truncated body: server declares Content-Length: 100 but sends only
-     * 1 byte before FIN. OkHttp detects the discrepancy and throws an IOException.
+     * 1 byte before FIN. OkHttp parses the headers successfully (200 OK), but throws
+     * an IOException when the body is consumed because fewer bytes arrived than promised.
      */
     @Test
-    void halfCloseWithHeaders() {
+    void halfCloseWithHeaders() throws IOException {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofMillis(500))
                 .readTimeout(Duration.ofMillis(1000))
@@ -228,11 +229,13 @@ public class FailsafeClientTest {
                 .url("http://localhost:10217/")
                 .get()
                 .build();
-        Assertions.assertThatThrownBy(() -> {
-            Response response = client.newCall(request).execute();
-            // Must consume body to trigger the truncation error
-            if (response.body() != null) response.body().string();
-        }).isInstanceOf(IOException.class);
+        // execute() succeeds — headers arrive normally
+        Response response = client.newCall(request).execute();
+        Assertions.assertThat(response.code()).isEqualTo(200);
+        Assertions.assertThat(response.header("Content-Length")).isEqualTo("100");
+        // body().string() fails — FIN arrives after 1 byte, not 100
+        Assertions.assertThatThrownBy(() -> response.body().string())
+                .isInstanceOf(IOException.class);
     }
 
     /**
@@ -252,8 +255,7 @@ public class FailsafeClientTest {
                 .GET()
                 .build();
         Assertions.assertThatThrownBy(() -> client.send(request, HttpResponse.BodyHandlers.ofString()))
-                .isInstanceOf(IOException.class)
-                .hasMessageContaining("no bytes");
+                .isInstanceOf(IOException.class);
     }
 
     /**

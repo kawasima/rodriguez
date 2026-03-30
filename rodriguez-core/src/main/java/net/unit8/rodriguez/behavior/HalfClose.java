@@ -98,18 +98,20 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
     }
 
     /**
-     * Returns whether a partial HTTP response (headers only) is sent before the half-close.
+     * Returns whether a truncated HTTP response is sent before the half-close.
      *
-     * @return true if headers are sent before shutting down output
+     * @return true if a response with Content-Length: 100 and 1 byte of body is sent before shutting down output
      */
     public boolean isSendPartialResponse() {
         return sendPartialResponse;
     }
 
     /**
-     * Sets whether to send a partial HTTP response (headers only) before the half-close.
+     * Sets whether to send a truncated HTTP response before the half-close.
+     * When true, sends {@code Content-Length: 100} with only 1 byte of body,
+     * then FIN — causing clients to throw an {@code IOException} on body read.
      *
-     * @param sendPartialResponse true to send headers before shutting down output
+     * @param sendPartialResponse true to send a truncated response before shutting down output
      */
     public void setSendPartialResponse(boolean sendPartialResponse) {
         this.sendPartialResponse = sendPartialResponse;
