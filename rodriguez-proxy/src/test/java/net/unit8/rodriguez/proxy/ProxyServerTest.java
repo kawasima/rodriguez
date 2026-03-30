@@ -250,8 +250,9 @@ class ProxyServerTest {
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
 
+        // CORS origin is now configurable; default is "http://localhost:10220" (not wildcard)
         assertThat(response.headers().firstValue("access-control-allow-origin"))
-                .hasValue("*");
+                .hasValueSatisfying(origin -> assertThat(origin).isNotEqualTo("*"));
     }
 
     @Test

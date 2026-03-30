@@ -82,7 +82,21 @@ public class ProxyHandler implements HttpHandler {
             String query = exchange.getRequestURI().getRawQuery();
             String targetUri = targetBase + path + (query != null ? "?" + query : "");
 
+            String contentLengthHeader = exchange.getRequestHeaders().getFirst("Content-Length");
+            if (contentLengthHeader != null) {
+                long contentLength = Long.parseLong(contentLengthHeader);
+                if (contentLength > config.getMaxRequestBodyBytes()) {
+                    exchange.sendResponseHeaders(413, -1);
+                    exchange.close();
+                    return;
+                }
+            }
             byte[] requestBody = exchange.getRequestBody().readAllBytes();
+            if (requestBody.length > config.getMaxRequestBodyBytes()) {
+                exchange.sendResponseHeaders(413, -1);
+                exchange.close();
+                return;
+            }
 
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(targetUri))

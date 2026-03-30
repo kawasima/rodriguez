@@ -60,7 +60,7 @@ public class ProxyServer {
         httpServer.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
 
         httpServer.createContext("/_proxy/api/", new ApiHandler(store, config, observedPathStore));
-        httpServer.createContext("/_proxy/events", new EventStreamHandler(broadcaster));
+        httpServer.createContext("/_proxy/events", new EventStreamHandler(broadcaster, config));
         httpServer.createContext("/_proxy/ui/", new StaticFileHandler());
         httpServer.createContext("/", new ProxyHandler(httpClient, store, config, observedPathStore));
 

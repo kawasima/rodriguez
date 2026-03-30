@@ -45,6 +45,8 @@ public class ApiHandler implements HttpHandler {
     private final ObservedPathStore observedPathStore;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Map<String, Integer> behaviorPortCache = new ConcurrentHashMap<>();
+    private final Map<String, Long> behaviorPortCacheTime = new ConcurrentHashMap<>();
+    private static final long BEHAVIOR_CACHE_TTL_MS = 60_000L;
 
     /**
      * Creates a new API handler.
@@ -61,7 +63,7 @@ public class ApiHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", config.getAllowedOrigin());
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
 
@@ -158,10 +160,20 @@ public class ApiHandler implements HttpHandler {
             faultPort = resolved;
         }
 
+        if (faultPort < 1 || faultPort > 65535) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(
+                    Map.of("error", "faultPort must be between 1 and 65535")));
+            return;
+        }
+
         String duration = (String) json.get("duration");
         FaultRule rule;
         try {
             rule = new FaultRule(pathPattern, faultType, faultPort, count, duration);
+        } catch (java.util.regex.PatternSyntaxException e) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(
+                    Map.of("error", "Invalid pathPattern regex: " + e.getDescription())));
+            return;
         } catch (IllegalArgumentException e) {
             sendJson(exchange, 400, mapper.writeValueAsBytes(
                     Map.of("error", "Invalid duration: " + duration + " (use e.g. \"30s\", \"5m\", \"1h\")")));
@@ -203,11 +215,11 @@ public class ApiHandler implements HttpHandler {
 
             List<BehaviorInfo> behaviors = new ArrayList<>();
             if (ports != null) {
-                ports.fields().forEachRemaining(entry -> {
+                for (var entry : ports.properties()) {
                     int port = Integer.parseInt(entry.getKey());
                     String type = entry.getValue().path("type").asText();
                     behaviors.add(new BehaviorInfo(type, port, ""));
-                });
+                }
             }
             sendJson(exchange, 200, mapper.writeValueAsBytes(behaviors));
         } catch (InterruptedException e) {
@@ -222,7 +234,9 @@ public class ApiHandler implements HttpHandler {
 
     private Integer resolveFaultPort(String faultType) {
         Integer cached = behaviorPortCache.get(faultType);
-        if (cached != null) {
+        Long cachedAt = behaviorPortCacheTime.get(faultType);
+        if (cached != null && cachedAt != null
+                && (System.currentTimeMillis() - cachedAt) < BEHAVIOR_CACHE_TTL_MS) {
             return cached;
         }
         try {
@@ -233,10 +247,12 @@ public class ApiHandler implements HttpHandler {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             JsonNode ports = mapper.readTree(response.body()).get("ports");
             if (ports != null) {
-                ports.fields().forEachRemaining(entry -> {
+                long now = System.currentTimeMillis();
+                for (var entry : ports.properties()) {
                     String type = entry.getValue().path("type").asText();
                     behaviorPortCache.put(type, Integer.parseInt(entry.getKey()));
-                });
+                    behaviorPortCacheTime.put(type, now);
+                }
             }
         } catch (IOException | InterruptedException e) {
             LOG.log(Level.WARNING, "Failed to fetch behaviors from control API", e);

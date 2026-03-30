@@ -3,7 +3,6 @@ package net.unit8.rodriguez.proxy.store;
 import net.unit8.rodriguez.proxy.model.FaultRule;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -13,8 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * When a rule's remaining count reaches zero, it is automatically removed.
  */
 public class FaultRuleStore {
-    private final ConcurrentHashMap<String, FaultRule> rules = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<String> ruleOrder = new CopyOnWriteArrayList<>();
+    private final LinkedHashMap<String, FaultRule> orderedRules = new LinkedHashMap<>();
     private final List<FaultRuleListener> listeners = new CopyOnWriteArrayList<>();
 
     /**
@@ -59,8 +57,9 @@ public class FaultRuleStore {
      * @param rule the rule to add
      */
     public void addRule(FaultRule rule) {
-        rules.put(rule.getId(), rule);
-        ruleOrder.add(rule.getId());
+        synchronized (orderedRules) {
+            orderedRules.put(rule.getId(), rule);
+        }
         listeners.forEach(l -> l.onRuleAdded(rule));
     }
 
@@ -70,9 +69,11 @@ public class FaultRuleStore {
      * @param id the rule ID to remove
      */
     public void removeRule(String id) {
-        FaultRule removed = rules.remove(id);
+        FaultRule removed;
+        synchronized (orderedRules) {
+            removed = orderedRules.remove(id);
+        }
         if (removed != null) {
-            ruleOrder.remove(id);
             listeners.forEach(l -> l.onRuleRemoved(removed));
         }
     }
@@ -84,7 +85,10 @@ public class FaultRuleStore {
      * @return the updated rule, or empty if not found
      */
     public Optional<FaultRule> incrementRule(String id) {
-        FaultRule rule = rules.get(id);
+        FaultRule rule;
+        synchronized (orderedRules) {
+            rule = orderedRules.get(id);
+        }
         if (rule == null) return Optional.empty();
         int remaining = rule.incrementAndGet();
         listeners.forEach(l -> l.onRuleConsumed(rule, remaining));
@@ -99,21 +103,20 @@ public class FaultRuleStore {
      * @return the matched rule, or empty if no rule matches
      */
     public Optional<FaultRule> findAndConsume(String path) {
-        for (String id : ruleOrder) {
-            FaultRule rule = rules.get(id);
-            if (rule == null) continue;
+        List<FaultRule> snapshot;
+        synchronized (orderedRules) {
+            snapshot = new ArrayList<>(orderedRules.values());
+        }
+
+        for (FaultRule rule : snapshot) {
             if (rule.isExpired()) {
-                rules.remove(id);
-                ruleOrder.remove(id);
-                listeners.forEach(l -> l.onRuleRemoved(rule));
+                removeRule(rule.getId());
                 continue;
             }
             if (rule.matches(path)) {
                 int remaining = rule.decrementAndGet();
                 if (remaining <= 0) {
-                    rules.remove(id);
-                    ruleOrder.remove(id);
-                    listeners.forEach(l -> l.onRuleRemoved(rule));
+                    removeRule(rule.getId());
                 } else {
                     listeners.forEach(l -> l.onRuleConsumed(rule, remaining));
                 }
@@ -127,9 +130,11 @@ public class FaultRuleStore {
      * Removes all fault rules from the store.
      */
     public void clearAll() {
-        List<FaultRule> removed = new ArrayList<>(rules.values());
-        rules.clear();
-        ruleOrder.clear();
+        List<FaultRule> removed;
+        synchronized (orderedRules) {
+            removed = new ArrayList<>(orderedRules.values());
+            orderedRules.clear();
+        }
         removed.forEach(rule -> listeners.forEach(l -> l.onRuleRemoved(rule)));
     }
 
@@ -139,17 +144,18 @@ public class FaultRuleStore {
      * @return unmodifiable list of active rules
      */
     public List<FaultRule> listRules() {
+        List<FaultRule> snapshot;
+        synchronized (orderedRules) {
+            snapshot = new ArrayList<>(orderedRules.values());
+        }
+
         List<FaultRule> result = new ArrayList<>();
-        for (String id : ruleOrder) {
-            FaultRule rule = rules.get(id);
-            if (rule == null) continue;
+        for (FaultRule rule : snapshot) {
             if (rule.isExpired()) {
-                rules.remove(id);
-                ruleOrder.remove(id);
-                listeners.forEach(l -> l.onRuleRemoved(rule));
-                continue;
+                removeRule(rule.getId());
+            } else {
+                result.add(rule);
             }
-            result.add(rule);
         }
         return Collections.unmodifiableList(result);
     }
