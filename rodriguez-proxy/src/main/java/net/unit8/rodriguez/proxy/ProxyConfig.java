@@ -120,6 +120,10 @@ public class ProxyConfig {
     /**
      * Returns the allowed CORS origin for the proxy API and SSE endpoints.
      *
+     * <p>Note: the default value is {@code "http://localhost:10220"} regardless of the configured
+     * {@code port}. If you change the port, set this value explicitly to match
+     * (e.g., {@code "http://localhost:<port>"}).
+     *
      * @return allowed origin (default "http://localhost:10220")
      */
     public String getAllowedOrigin() {

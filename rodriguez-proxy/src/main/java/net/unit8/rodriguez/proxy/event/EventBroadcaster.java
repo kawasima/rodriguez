@@ -37,7 +37,7 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
     /** Creates a new EventBroadcaster and starts the SSE heartbeat. */
     public EventBroadcaster() {
         scheduler.scheduleAtFixedRate(
-                (Runnable) this::sendHeartbeat,
+                this::sendHeartbeat,
                 HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 

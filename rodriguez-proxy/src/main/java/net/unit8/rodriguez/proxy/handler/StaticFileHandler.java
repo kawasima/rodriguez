@@ -30,7 +30,7 @@ public class StaticFileHandler implements HttpHandler {
             }
 
             if (resourcePath.contains("..") || !resourcePath.startsWith(RESOURCE_PREFIX + "/")) {
-                exchange.sendResponseHeaders(400, -1);
+                exchange.sendResponseHeaders(403, -1);
                 return;
             }
 

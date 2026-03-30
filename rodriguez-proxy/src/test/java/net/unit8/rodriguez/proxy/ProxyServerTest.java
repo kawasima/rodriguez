@@ -71,6 +71,7 @@ class ProxyServerTest {
         config.setPort(PROXY_PORT);
         config.setUpstream("http://localhost:" + UPSTREAM_PORT);
         config.setControlUrl("http://localhost:" + CONTROL_PORT);
+        config.setAllowedOrigin("http://localhost:" + PROXY_PORT);
         proxyServer = new ProxyServer(config);
         proxyServer.start();
     }
@@ -250,9 +251,8 @@ class ProxyServerTest {
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
 
-        // CORS origin is now configurable; default is "http://localhost:10220" (not wildcard)
         assertThat(response.headers().firstValue("access-control-allow-origin"))
-                .hasValueSatisfying(origin -> assertThat(origin).isNotEqualTo("*"));
+                .hasValue("http://localhost:" + PROXY_PORT);
     }
 
     @Test
