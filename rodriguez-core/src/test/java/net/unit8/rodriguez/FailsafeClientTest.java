@@ -17,6 +17,10 @@ import java.io.Reader;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Objects;
 
@@ -230,6 +234,47 @@ public class FailsafeClientTest {
         Assertions.assertThat(response.header("Content-Type")).isEqualTo("application/json");
         String body = response.body() != null ? response.body().string() : "";
         Assertions.assertThat(body).isEmpty();
+    }
+
+    /**
+     * TCP half-close (no response) via JDK HttpClient.
+     * JDK HttpClient detects the empty reply immediately and throws IOException
+     * ("HTTP/1.1 header parser received no bytes"), unlike OkHttp which also
+     * throws IOException but with "unexpected end of stream".
+     */
+    @Test
+    void halfCloseWithJdkClient() {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(500))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:10216/"))
+                .timeout(Duration.ofMillis(1000))
+                .GET()
+                .build();
+        Assertions.assertThatThrownBy(() -> client.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("no bytes");
+    }
+
+    /**
+     * TCP half-close with headers via JDK HttpClient.
+     * Like OkHttp, JDK HttpClient treats the FIN-after-headers as end-of-body
+     * and returns 200 OK with an empty body — no exception is thrown.
+     */
+    @Test
+    void halfCloseWithHeadersWithJdkClient() throws Exception {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(500))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:10217/"))
+                .timeout(Duration.ofMillis(1000))
+                .GET()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        Assertions.assertThat(response.statusCode()).isEqualTo(200);
+        Assertions.assertThat(response.body()).isEmpty();
     }
 
     /**
