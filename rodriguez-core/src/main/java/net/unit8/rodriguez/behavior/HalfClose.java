@@ -43,8 +43,10 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
         try {
             getMetricRegistry().counter(MetricRegistry.name(getClass(), "call")).inc();
 
-            // Drain the client's request so the client is ready to read the response
-            socket.setSoTimeout(3000);
+            // Drain the client's request so the client is ready to read the response.
+            // HTTP clients stop sending after the request headers/body and then wait
+            // for the response, so use a short timeout to detect that transition.
+            socket.setSoTimeout(200);
             InputStream is = socket.getInputStream();
             byte[] buf = new byte[4096];
             try {
@@ -55,11 +57,14 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
                 // Client stopped sending — expected for HTTP clients waiting for a response
             }
 
-            // Optionally send HTTP headers without a body
+            // Optionally send HTTP headers without a body.
+            // Content-Length: 0 tells the client the body is empty so it can
+            // read the complete response and send its own FIN immediately.
             if (sendPartialResponse) {
                 OutputStream os = socket.getOutputStream();
                 os.write(("HTTP/1.1 200 OK\r\n" +
                         "Content-Type: application/json\r\n" +
+                        "Content-Length: 0\r\n" +
                         "\r\n").getBytes());
                 os.flush();
             }
@@ -72,8 +77,13 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
             // Half-close: send FIN in the outbound direction only
             socket.shutdownOutput();
 
-            // Keep receive side open — wait for the client to close its side
-            TimeUnit.SECONDS.sleep(30);
+            // Keep receive side open — wait for the client to send its FIN.
+            // This is the correct half-close behavior: the inbound direction stays
+            // open until the client acknowledges the EOF and closes its side.
+            socket.setSoTimeout(0); // wait indefinitely for client FIN
+            while (is.read(buf) != -1) {
+                // drain any trailing data the client may send
+            }
 
             getMetricRegistry().counter(MetricRegistry.name(getClass(), "handle-complete")).inc();
         } catch (SocketTimeoutException e) {

@@ -212,10 +212,10 @@ public class FailsafeClientTest {
 
     /**
      * TCP half-close with partial response: server sends HTTP headers then FIN, body never arrives.
-     * The client receives headers but times out waiting for the body.
+     * Client receives headers and an empty body (EOF immediately after headers).
      */
     @Test
-    void halfCloseWithHeaders() {
+    void halfCloseWithHeaders() throws IOException {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofMillis(500))
                 .readTimeout(Duration.ofMillis(1000))
@@ -224,13 +224,11 @@ public class FailsafeClientTest {
                 .url("http://localhost:10217/")
                 .get()
                 .build();
-        Assertions.assertThatThrownBy(() -> {
-            Response response = client.newCall(request).execute();
-            Assertions.assertThat(response.code()).isEqualTo(200);
-            Assertions.assertThat(response.header("Content-Type")).isEqualTo("application/json");
-            // body read times out — server sent headers then half-closed
-            response.body().string();
-        }).isInstanceOf(SocketTimeoutException.class);
+        Response response = client.newCall(request).execute();
+        Assertions.assertThat(response.code()).isEqualTo(200);
+        Assertions.assertThat(response.header("Content-Type")).isEqualTo("application/json");
+        String body = response.body() != null ? response.body().string() : "";
+        Assertions.assertThat(body).isEmpty();
     }
 
     /**
