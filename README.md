@@ -230,7 +230,7 @@ inbound direction open. The client receives an EOF signal before any complete re
 | delayMs | Delay in milliseconds before performing the half-close | 0 |
 
 - Port 10216: no response at all — client gets `Empty reply from server`
-- Port 10217: headers sent, body missing — client gets a JSON parse failure
+- Port 10217: headers sent, then FIN with no body — client behavior varies (OkHttp returns empty body; other clients may throw a parse error)
 
 ### SlowResponse (HTTP)
 

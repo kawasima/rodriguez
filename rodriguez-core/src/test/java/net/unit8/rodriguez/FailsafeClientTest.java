@@ -211,8 +211,9 @@ public class FailsafeClientTest {
     }
 
     /**
-     * TCP half-close with partial response: server sends HTTP headers then FIN, body never arrives.
-     * Client receives headers and an empty body (EOF immediately after headers).
+     * TCP half-close with partial response: server sends HTTP headers then FIN with no body.
+     * OkHttp treats the FIN as end-of-body and returns an empty response body.
+     * Other HTTP clients may behave differently (e.g. throw a parse error).
      */
     @Test
     void halfCloseWithHeaders() throws IOException {

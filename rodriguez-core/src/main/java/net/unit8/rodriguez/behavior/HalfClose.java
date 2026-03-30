@@ -79,7 +79,9 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
             // Keep receive side open — wait for the client to send its FIN.
             // This is the correct half-close behavior: the inbound direction stays
             // open until the client acknowledges the EOF and closes its side.
-            socket.setSoTimeout(0); // wait indefinitely for client FIN
+            // A 30-second limit prevents the thread from blocking forever if the
+            // client never responds (e.g. connection dropped without sending FIN).
+            socket.setSoTimeout(30_000);
             while (is.read(buf) != -1) {
                 // drain any trailing data the client may send
             }
