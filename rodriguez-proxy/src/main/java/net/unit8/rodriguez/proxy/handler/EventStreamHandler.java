@@ -2,6 +2,7 @@ package net.unit8.rodriguez.proxy.handler;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import net.unit8.rodriguez.proxy.ProxyConfig;
 import net.unit8.rodriguez.proxy.event.EventBroadcaster;
 
 import java.io.IOException;
@@ -15,14 +16,17 @@ import java.io.OutputStream;
  */
 public class EventStreamHandler implements HttpHandler {
     private final EventBroadcaster broadcaster;
+    private final ProxyConfig config;
 
     /**
      * Creates a new event stream handler.
      *
      * @param broadcaster the event broadcaster to register clients with
+     * @param config      proxy configuration (used for CORS allowed origin)
      */
-    public EventStreamHandler(EventBroadcaster broadcaster) {
+    public EventStreamHandler(EventBroadcaster broadcaster, ProxyConfig config) {
         this.broadcaster = broadcaster;
+        this.config = config;
     }
 
     @Override
@@ -30,7 +34,7 @@ public class EventStreamHandler implements HttpHandler {
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
         exchange.getResponseHeaders().set("Cache-Control", "no-cache");
         exchange.getResponseHeaders().set("Connection", "keep-alive");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", config.getAllowedOrigin());
         exchange.sendResponseHeaders(200, 0);
 
         OutputStream os = exchange.getResponseBody();

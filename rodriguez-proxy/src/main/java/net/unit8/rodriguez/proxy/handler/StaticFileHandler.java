@@ -29,6 +29,11 @@ public class StaticFileHandler implements HttpHandler {
                 resourcePath += "index.html";
             }
 
+            if (resourcePath.contains("..") || !resourcePath.startsWith(RESOURCE_PREFIX + "/")) {
+                exchange.sendResponseHeaders(403, -1);
+                return;
+            }
+
             try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
                 if (is == null) {
                     exchange.sendResponseHeaders(404, -1);

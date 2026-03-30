@@ -12,6 +12,8 @@ public class ProxyConfig {
     private int connectTimeoutMs = 5000;
     private int requestTimeoutMs = 30000;
     private String controlUrl = "http://localhost:10200";
+    private String allowedOrigin = "http://localhost:10220";
+    private long maxRequestBodyBytes = 10L * 1024 * 1024;
 
     /** Creates a new ProxyConfig with default values. */
     public ProxyConfig() {
@@ -113,5 +115,45 @@ public class ProxyConfig {
 
     public void setControlUrl(String controlUrl) {
         this.controlUrl = controlUrl;
+    }
+
+    /**
+     * Returns the allowed CORS origin for the proxy API and SSE endpoints.
+     *
+     * <p>Note: the default value is {@code "http://localhost:10220"} regardless of the configured
+     * {@code port}. If you change the port, set this value explicitly to match
+     * (e.g., {@code "http://localhost:<port>"}).
+     *
+     * @return allowed origin (default "http://localhost:10220")
+     */
+    public String getAllowedOrigin() {
+        return allowedOrigin;
+    }
+
+    /**
+     * Sets the allowed CORS origin for the proxy API and SSE endpoints.
+     *
+     * @param allowedOrigin allowed origin (e.g., "http://localhost:3000")
+     */
+    public void setAllowedOrigin(String allowedOrigin) {
+        this.allowedOrigin = allowedOrigin;
+    }
+
+    /**
+     * Returns the maximum allowed request body size in bytes.
+     *
+     * @return max body size (default 10 MB)
+     */
+    public long getMaxRequestBodyBytes() {
+        return maxRequestBodyBytes;
+    }
+
+    /**
+     * Sets the maximum allowed request body size in bytes.
+     *
+     * @param maxRequestBodyBytes max body size in bytes
+     */
+    public void setMaxRequestBodyBytes(long maxRequestBodyBytes) {
+        this.maxRequestBodyBytes = maxRequestBodyBytes;
     }
 }

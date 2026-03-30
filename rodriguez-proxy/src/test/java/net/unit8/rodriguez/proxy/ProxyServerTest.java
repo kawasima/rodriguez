@@ -71,6 +71,7 @@ class ProxyServerTest {
         config.setPort(PROXY_PORT);
         config.setUpstream("http://localhost:" + UPSTREAM_PORT);
         config.setControlUrl("http://localhost:" + CONTROL_PORT);
+        config.setAllowedOrigin("http://localhost:" + PROXY_PORT);
         proxyServer = new ProxyServer(config);
         proxyServer.start();
     }
@@ -251,7 +252,7 @@ class ProxyServerTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.headers().firstValue("access-control-allow-origin"))
-                .hasValue("*");
+                .hasValue("http://localhost:" + PROXY_PORT);
     }
 
     @Test

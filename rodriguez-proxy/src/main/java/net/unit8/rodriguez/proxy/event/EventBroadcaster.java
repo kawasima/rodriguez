@@ -11,6 +11,9 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,8 +25,21 @@ import java.util.logging.Logger;
  */
 public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, ObservedPathStore.Observer {
     private static final Logger LOG = Logger.getLogger(EventBroadcaster.class.getName());
+    private static final int HEARTBEAT_INTERVAL_SECONDS = 30;
     private final CopyOnWriteArrayList<OutputStream> clients = new CopyOnWriteArrayList<>();
     private final ObjectMapper mapper = new ObjectMapper();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "sse-heartbeat");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /** Creates a new EventBroadcaster and starts the SSE heartbeat. */
+    public EventBroadcaster() {
+        scheduler.scheduleAtFixedRate(
+                this::sendHeartbeat,
+                HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+    }
 
     /**
      * Registers a new SSE client output stream.
@@ -32,6 +48,18 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
      */
     public void addClient(OutputStream os) {
         clients.add(os);
+    }
+
+    private void sendHeartbeat() {
+        byte[] bytes = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8);
+        for (OutputStream os : clients) {
+            try {
+                os.write(bytes);
+                os.flush();
+            } catch (IOException e) {
+                clients.remove(os);
+            }
+        }
     }
 
     private void broadcast(FaultEvent event) {
@@ -97,9 +125,10 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
     }
 
     /**
-     * Closes all connected SSE clients.
+     * Closes all connected SSE clients and stops the heartbeat scheduler.
      */
     public void shutdown() {
+        scheduler.shutdownNow();
         for (OutputStream os : clients) {
             try {
                 os.close();
