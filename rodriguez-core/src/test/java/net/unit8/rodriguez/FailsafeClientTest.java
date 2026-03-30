@@ -17,6 +17,10 @@ import java.io.Reader;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Objects;
 
@@ -191,6 +195,86 @@ public class FailsafeClientTest {
         Assertions.assertThat(response.code()).isEqualTo(200);
         byte[] body = Objects.requireNonNull(response.body()).bytes();
         Assertions.assertThat(body.length).isEqualTo(10_485_760);
+    }
+
+    /**
+     * TCP half-close: connection established, server sends FIN immediately with no response body.
+     */
+    @Test
+    void halfClose() throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10216/")
+                .get()
+                .build();
+        Assertions.assertThatThrownBy(() -> client.newCall(request).execute())
+                .isInstanceOf(IOException.class);
+    }
+
+    /**
+     * TCP half-close with truncated body: server declares Content-Length: 100 but sends only
+     * 1 byte before FIN. OkHttp parses the headers successfully (200 OK), but throws
+     * an IOException when the body is consumed because fewer bytes arrived than promised.
+     */
+    @Test
+    void halfCloseWithHeaders() throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10217/")
+                .get()
+                .build();
+        // execute() succeeds — headers arrive normally
+        Response response = client.newCall(request).execute();
+        Assertions.assertThat(response.code()).isEqualTo(200);
+        Assertions.assertThat(response.header("Content-Length")).isEqualTo("100");
+        // body().string() fails — FIN arrives after 1 byte, not 100
+        Assertions.assertThatThrownBy(() -> response.body().string())
+                .isInstanceOf(IOException.class);
+    }
+
+    /**
+     * TCP half-close (no response) via JDK HttpClient.
+     * JDK HttpClient detects the empty reply immediately and throws IOException,
+     * similar to OkHttp but with a different error message.
+     */
+    @Test
+    void halfCloseWithJdkClient() {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(500))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:10216/"))
+                .timeout(Duration.ofMillis(1000))
+                .GET()
+                .build();
+        Assertions.assertThatThrownBy(() -> client.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class);
+    }
+
+    /**
+     * TCP half-close with truncated body via JDK HttpClient.
+     * Server declares Content-Length: 100 but sends only 1 byte before FIN.
+     * JDK HttpClient detects the body truncation and throws an IOException.
+     */
+    @Test
+    void halfCloseWithHeadersWithJdkClient() {
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(500))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:10217/"))
+                .timeout(Duration.ofMillis(1000))
+                .GET()
+                .build();
+        Assertions.assertThatThrownBy(() ->
+                client.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class);
     }
 
     /**
