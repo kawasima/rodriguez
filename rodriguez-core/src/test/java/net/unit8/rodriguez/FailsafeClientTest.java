@@ -194,6 +194,46 @@ public class FailsafeClientTest {
     }
 
     /**
+     * TCP half-close: connection established, server sends FIN immediately with no response body.
+     */
+    @Test
+    void halfClose() throws IOException {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10216/")
+                .get()
+                .build();
+        Assertions.assertThatThrownBy(() -> client.newCall(request).execute())
+                .isInstanceOf(IOException.class);
+    }
+
+    /**
+     * TCP half-close with partial response: server sends HTTP headers then FIN, body never arrives.
+     * The client receives headers but times out waiting for the body.
+     */
+    @Test
+    void halfCloseWithHeaders() {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(Duration.ofMillis(500))
+                .readTimeout(Duration.ofMillis(1000))
+                .build();
+        Request request = new Request.Builder()
+                .url("http://localhost:10217/")
+                .get()
+                .build();
+        Assertions.assertThatThrownBy(() -> {
+            Response response = client.newCall(request).execute();
+            Assertions.assertThat(response.code()).isEqualTo(200);
+            Assertions.assertThat(response.header("Content-Type")).isEqualTo("application/json");
+            // body read times out — server sent headers then half-closed
+            response.body().string();
+        }).isInstanceOf(SocketTimeoutException.class);
+    }
+
+    /**
      * The service refuses all authentication credentials.
      */
     @Test

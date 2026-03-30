@@ -10,7 +10,6 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 /**
  * A socket behavior that performs a TCP half-close.
@@ -30,8 +29,6 @@ import java.util.logging.Logger;
  * </ul>
  */
 public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
-    private static final Logger LOG = Logger.getLogger(HalfClose.class.getName());
-
     private boolean sendPartialResponse = false;
     private long delayMs = 0;
 
