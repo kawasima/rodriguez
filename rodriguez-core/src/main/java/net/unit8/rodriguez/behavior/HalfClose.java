@@ -57,14 +57,13 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
                 // Client stopped sending — expected for HTTP clients waiting for a response
             }
 
-            // Optionally send HTTP headers without a body.
-            // Content-Length: 0 tells the client the body is empty so it can
-            // read the complete response and send its own FIN immediately.
+            // Optionally send HTTP response headers without a body, then half-close.
+            // No Content-Length is sent, so the client cannot determine where the
+            // body ends — it will receive a FIN mid-response and must handle that.
             if (sendPartialResponse) {
                 OutputStream os = socket.getOutputStream();
                 os.write(("HTTP/1.1 200 OK\r\n" +
                         "Content-Type: application/json\r\n" +
-                        "Content-Length: 0\r\n" +
                         "\r\n").getBytes());
                 os.flush();
             }
