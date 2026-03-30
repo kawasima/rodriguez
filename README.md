@@ -176,6 +176,8 @@ curl -XPOST http://localhost:10200/shutdown
 | 10213 | S3Mock | AWS |
 | 10214 | SQSMock | AWS |
 | 10215 | GCSMock | GCP |
+| 10216 | HalfClose | Socket |
+| 10217 | HalfClose (headers only) | Socket |
 | 10220 | Fault-Injecting Reverse Proxy | Extension |
 
 ### RefuseConnection
@@ -213,6 +215,22 @@ Default port: 10209
 TCP connection is established and the server reads the request, but never sends any response data.
 This simulates a service that completes the TCP handshake and accepts the connection,
 but remains completely silent from the client's perspective.
+
+### HalfClose
+
+Default port: 10216 (no response), 10217 (headers only)
+
+TCP half-close: the server accepts the connection, optionally sends a partial HTTP response,
+then calls `shutdownOutput()` to send a FIN in the outbound direction while keeping the
+inbound direction open. The client receives an EOF signal before any complete response body arrives.
+
+| Property | Description | Default |
+| --- | --- | --- |
+| sendPartialResponse | Send HTTP headers before closing (true = headers only, false = empty reply) | false |
+| delayMs | Delay in milliseconds before performing the half-close | 0 |
+
+- Port 10216: no response at all — client gets `Empty reply from server`
+- Port 10217: headers sent, body missing — client gets a JSON parse failure
 
 ### SlowResponse (HTTP)
 

@@ -35,6 +35,14 @@
     },
     "10212": {
       "type": "RefuseAuthentication"
+    },
+    "10216": {
+      "type": "HalfClose"
+    },
+    "10217": {
+      "type": "HalfClose",
+      "sendPartialResponse": true,
+      "delayMs": 100
     }
   }
 }
