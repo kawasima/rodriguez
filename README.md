@@ -226,11 +226,11 @@ inbound direction open. The client receives an EOF signal before any complete re
 
 | Property | Description | Default |
 | --- | --- | --- |
-| sendPartialResponse | Send HTTP headers before closing (true = headers only, false = empty reply) | false |
+| sendPartialResponse | Send truncated response before closing (true = declares Content-Length: 100, sends 1 byte; false = empty reply) | false |
 | delayMs | Delay in milliseconds before performing the half-close | 0 |
 
 - Port 10216: no response at all — client gets `Empty reply from server`
-- Port 10217: headers sent, then FIN with no body — client behavior varies (OkHttp returns empty body; other clients may throw a parse error)
+- Port 10217: `Content-Length: 100` declared but only 1 byte sent before FIN — client detects truncation and throws `IOException`
 
 ### SlowResponse (HTTP)
 

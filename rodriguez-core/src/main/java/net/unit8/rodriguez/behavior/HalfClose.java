@@ -24,8 +24,9 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  *   <li>{@code false} (default): FIN is sent immediately after draining the request,
  *       with no response body. The client receives an empty response.</li>
- *   <li>{@code true}: HTTP headers are sent before the FIN, but no body follows.
- *       The client receives headers and then EOF, causing JSON parse failures.</li>
+ *   <li>{@code true}: HTTP headers with {@code Content-Length: 100} are sent, followed
+ *       by only 1 byte of body, then FIN. The client expects 100 bytes but the connection
+ *       is cut short — causing an {@code IOException} due to truncated body.</li>
  * </ul>
  */
 public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
@@ -57,14 +58,16 @@ public class HalfClose implements SocketInstabilityBehavior, MetricsAvailable {
                 // Client stopped sending — expected for HTTP clients waiting for a response
             }
 
-            // Optionally send HTTP response headers without a body, then half-close.
-            // No Content-Length is sent, so the client cannot determine where the
-            // body ends — it will receive a FIN mid-response and must handle that.
+            // Optionally send HTTP response with Content-Length: 100 but only 1 byte of body,
+            // then half-close. The client expects 100 bytes but receives only 1 before the
+            // FIN — causing an IOException due to truncated body.
             if (sendPartialResponse) {
                 OutputStream os = socket.getOutputStream();
                 os.write(("HTTP/1.1 200 OK\r\n" +
                         "Content-Type: application/json\r\n" +
-                        "\r\n").getBytes());
+                        "Content-Length: 100\r\n" +
+                        "\r\n" +
+                        "{").getBytes());
                 os.flush();
             }
 

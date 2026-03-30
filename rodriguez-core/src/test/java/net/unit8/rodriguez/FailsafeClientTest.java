@@ -215,12 +215,11 @@ public class FailsafeClientTest {
     }
 
     /**
-     * TCP half-close with partial response: server sends HTTP headers then FIN with no body.
-     * OkHttp treats the FIN as end-of-body and returns an empty response body.
-     * Other HTTP clients may behave differently (e.g. throw a parse error).
+     * TCP half-close with truncated body: server declares Content-Length: 100 but sends only
+     * 1 byte before FIN. OkHttp detects the discrepancy and throws an IOException.
      */
     @Test
-    void halfCloseWithHeaders() throws IOException {
+    void halfCloseWithHeaders() {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(Duration.ofMillis(500))
                 .readTimeout(Duration.ofMillis(1000))
@@ -229,11 +228,11 @@ public class FailsafeClientTest {
                 .url("http://localhost:10217/")
                 .get()
                 .build();
-        Response response = client.newCall(request).execute();
-        Assertions.assertThat(response.code()).isEqualTo(200);
-        Assertions.assertThat(response.header("Content-Type")).isEqualTo("application/json");
-        String body = response.body() != null ? response.body().string() : "";
-        Assertions.assertThat(body).isEmpty();
+        Assertions.assertThatThrownBy(() -> {
+            Response response = client.newCall(request).execute();
+            // Must consume body to trigger the truncation error
+            if (response.body() != null) response.body().string();
+        }).isInstanceOf(IOException.class);
     }
 
     /**
@@ -258,12 +257,12 @@ public class FailsafeClientTest {
     }
 
     /**
-     * TCP half-close with headers via JDK HttpClient.
-     * Like OkHttp, JDK HttpClient treats the FIN-after-headers as end-of-body
-     * and returns 200 OK with an empty body — no exception is thrown.
+     * TCP half-close with truncated body via JDK HttpClient.
+     * Server declares Content-Length: 100 but sends only 1 byte before FIN.
+     * JDK HttpClient detects the body truncation and throws an IOException.
      */
     @Test
-    void halfCloseWithHeadersWithJdkClient() throws Exception {
+    void halfCloseWithHeadersWithJdkClient() {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(500))
                 .build();
@@ -272,9 +271,9 @@ public class FailsafeClientTest {
                 .timeout(Duration.ofMillis(1000))
                 .GET()
                 .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        Assertions.assertThat(response.statusCode()).isEqualTo(200);
-        Assertions.assertThat(response.body()).isEmpty();
+        Assertions.assertThatThrownBy(() ->
+                client.send(request, HttpResponse.BodyHandlers.ofString()))
+                .isInstanceOf(IOException.class);
     }
 
     /**
