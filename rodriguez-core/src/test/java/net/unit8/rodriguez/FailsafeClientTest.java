@@ -240,9 +240,8 @@ public class FailsafeClientTest {
 
     /**
      * TCP half-close (no response) via JDK HttpClient.
-     * JDK HttpClient detects the empty reply immediately and throws IOException
-     * ("HTTP/1.1 header parser received no bytes"), unlike OkHttp which also
-     * throws IOException but with "unexpected end of stream".
+     * JDK HttpClient detects the empty reply immediately and throws IOException,
+     * similar to OkHttp but with a different error message.
      */
     @Test
     void halfCloseWithJdkClient() {

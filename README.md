@@ -218,7 +218,7 @@ but remains completely silent from the client's perspective.
 
 ### HalfClose
 
-Default port: 10216 (no response), 10217 (headers only)
+Default port: 10216 (no response), 10217 (truncated body)
 
 TCP half-close: the server accepts the connection, optionally sends a partial HTTP response,
 then calls `shutdownOutput()` to send a FIN in the outbound direction while keeping the
