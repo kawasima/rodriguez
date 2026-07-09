@@ -3,6 +3,9 @@ package net.unit8.rodriguez.aws.behavior.s3;
 import net.unit8.rodriguez.aws.MockAction;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
@@ -101,6 +104,33 @@ public abstract class S3ActionBase<T> implements MockAction<T> {
         if (!resolved.startsWith(root)) {
             throw new S3AccessDeniedException("Resolved path escapes the storage root: " + resolved);
         }
+        verifyRealPathWithin(root, resolved);
         return resolved;
+    }
+
+    /**
+     * Best-effort symlink defense on top of the lexical containment check above.
+     * The lexical check cannot detect a symlink inside the storage root that points
+     * outside it, so this resolves the real path of the target (or, for a not-yet-created
+     * object, its nearest existing ancestor) and verifies it is still contained within
+     * the storage root's real path. Not-yet-existing keys keep resolving normally because
+     * only the existing prefix is checked.
+     */
+    private void verifyRealPathWithin(Path root, Path resolved) {
+        try {
+            Path existing = resolved;
+            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+                existing = existing.getParent();
+            }
+            if (existing == null) {
+                return;
+            }
+            if (!existing.toRealPath().startsWith(root.toRealPath())) {
+                throw new S3AccessDeniedException(
+                        "Resolved path escapes the storage root via symlink: " + resolved);
+            }
+        } catch (IOException e) {
+            throw new S3AccessDeniedException("Failed to verify path containment: " + resolved);
+        }
     }
 }

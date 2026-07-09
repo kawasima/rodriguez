@@ -56,6 +56,16 @@ class RodriguezConnectionTest {
     }
 
     @Test
+    void portlessUrlThrowsSqlExceptionNotIllegalArgument() {
+        // A JDBC URL without a port (uri.getPort() == -1) must surface as a SQLException,
+        // not an unchecked IllegalArgumentException from new Socket(host, -1).
+        assertThatThrownBy(() -> new ConnectionImpl("jdbc:rodriguez://localhost", new java.util.Properties()))
+                .isInstanceOf(SQLException.class)
+                .isNotInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("host and port required");
+    }
+
+    @Test
     void notAccept() {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:rodriguez://localhost:10203");

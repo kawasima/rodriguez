@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Tests for {@link FaultInjectionFS} passthrough correctness, focusing on the
@@ -98,5 +99,46 @@ class FaultInjectionFSTest {
         // before the stat struct is ever touched, so passing null is safe here.
         int result = fs.getattr("/../../etc/passwd", null);
         assertThat(result).isNegative();
+    }
+
+    @Test
+    void symlinkEscapingBackingDirIsNotFollowed(@TempDir Path backing, @TempDir Path outside)
+            throws IOException {
+        // A secret file that lives OUTSIDE the backing directory.
+        Path secret = outside.resolve("secret.txt");
+        Files.writeString(secret, "top secret");
+
+        // A symlink INSIDE the backing dir pointing at the outside file. Lexical containment
+        // passes (the link itself is under backing), but following it escapes the root, so the
+        // real-path check must reject the operation.
+        Path link = backing.resolve("escape.txt");
+        try {
+            Files.createSymbolicLink(link, secret);
+        } catch (UnsupportedOperationException | IOException e) {
+            assumeTrue(false, "Symlinks are not supported on this platform");
+        }
+
+        FaultInjectionFS fs = new FaultInjectionFS(backing, List.of());
+
+        // Reading through the escaping symlink must be rejected, not leak the outside file.
+        Pointer readBuf = Memory.allocate(RUNTIME, 32);
+        int read = fs.read("/escape.txt", readBuf, 32, 0, null);
+        assertThat(read).isNegative();
+
+        // getattr through the escaping symlink is likewise rejected (null stat is safe:
+        // the containment check returns before the struct is touched).
+        int attr = fs.getattr("/escape.txt", null);
+        assertThat(attr).isNegative();
+    }
+
+    @Test
+    void createInsideBackingStillWorksWithRealPathCheck(@TempDir Path backing) {
+        // The real-path containment check must not break creation of not-yet-existing files,
+        // whose nearest existing ancestor (the backing dir) is safely inside the root.
+        FaultInjectionFS fs = new FaultInjectionFS(backing, List.of());
+
+        byte[] payload = "data".getBytes();
+        int written = fs.write("/fresh.txt", buffer(payload), payload.length, 0, null);
+        assertThat(written).isEqualTo(payload.length);
     }
 }

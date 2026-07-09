@@ -164,12 +164,16 @@ public class UploadObjectAction extends GCSActionBase<Map<String, Object>> {
      */
     private static byte[] readBounded(InputStream in, long limit) {
         try {
-            // Read at most limit + 1 bytes to detect overflow without buffering
-            // an unbounded amount of input.
-            int cap = (int) Math.min(limit + 1, Integer.MAX_VALUE);
+            // Multipart bodies are buffered fully in memory, so the effective cap
+            // can never exceed a Java array's capacity. Clamp `limit` to that bound
+            // before computing `limit + 1` so the read cap cannot overflow to a
+            // negative int (which would throw) nor silently saturate at
+            // Integer.MAX_VALUE while the size check below never fires.
+            long effectiveLimit = Math.min(limit, (long) Integer.MAX_VALUE - 8);
+            int cap = (int) (effectiveLimit + 1);
             byte[] data = in.readNBytes(cap);
-            if (data.length > limit) {
-                throw new GCSException(413, "Upload exceeds maximum allowed size of " + limit + " bytes");
+            if (data.length > effectiveLimit) {
+                throw new GCSException(413, "Upload exceeds maximum allowed size of " + effectiveLimit + " bytes");
             }
             return data;
         } catch (IOException e) {

@@ -59,6 +59,13 @@ public class FaultInjectionFS extends FuseStubFS {
      * usually strips {@code ..} segments before they reach this layer, a path that
      * escapes the backing directory returns {@code null} so callers can reject it.
      *
+     * <p>Lexical containment alone does not defend against a symlink inside the backing
+     * directory that points outside it, because the {@code Files}/{@code FileChannel}
+     * operations that callers perform follow symlinks. As best-effort defense, once the
+     * lexical check passes we resolve the real path of the target (or, for a not-yet-existing
+     * target, its nearest existing ancestor) via {@link Path#toRealPath} and confirm it is
+     * still contained under the backing directory's real path.
+     *
      * @param path the FUSE path (absolute, rooted at the mount point)
      * @return the resolved backing path, or {@code null} if it escapes the backing directory
      */
@@ -71,7 +78,41 @@ public class FaultInjectionFS extends FuseStubFS {
         if (!resolved.startsWith(backingPath)) {
             return null;
         }
+        if (!isWithinBackingRealPath(resolved)) {
+            return null;
+        }
         return resolved;
+    }
+
+    /**
+     * Verifies that a lexically-contained path does not escape the backing directory
+     * through a symlink. The nearest existing ancestor of {@code resolved} is resolved to
+     * its canonical form and checked against the backing directory's real path.
+     *
+     * <p>If {@code resolved} itself exists (including as a symlink), its own real path is
+     * checked, so a symlink pointing outside the backing root is rejected. For a
+     * not-yet-existing target, only its existing ancestors can be verified here; the
+     * canonical status of the freshly-created leaf itself is not yet knowable, which is an
+     * acceptable residual caveat since the ancestor check still blocks escapes via an
+     * existing intermediate symlink. Fails closed if the real path cannot be resolved.
+     *
+     * @param resolved a lexically-contained backing path
+     * @return {@code true} if the path is contained under the backing directory's real path
+     */
+    private boolean isWithinBackingRealPath(Path resolved) {
+        try {
+            Path backingReal = backingPath.toRealPath();
+            Path existing = resolved;
+            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+                existing = existing.getParent();
+            }
+            if (existing == null) {
+                return false;
+            }
+            return existing.toRealPath().startsWith(backingReal);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private FuseFault findFault(String path, FuseOperation operation) {

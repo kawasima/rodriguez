@@ -140,7 +140,13 @@ public class ApiHandler implements HttpHandler {
     }
 
     private void handleCreateRule(HttpExchange exchange) throws IOException {
-        byte[] body = exchange.getRequestBody().readAllBytes();
+        // Bound the request body so a large POST cannot OOM the control port.
+        byte[] body = ProxyHandler.readBounded(
+                exchange.getRequestBody(), config.getMaxRequestBodyBytes());
+        if (body == null) {
+            exchange.sendResponseHeaders(413, -1);
+            return;
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> json = mapper.readValue(body, Map.class);
 
@@ -199,6 +205,13 @@ public class ApiHandler implements HttpHandler {
             if (resolved == null) {
                 sendJson(exchange, 400, mapper.writeValueAsBytes(
                         Map.of("error", "Unknown faultType: " + faultType)));
+                return;
+            }
+            // Apply the same allow-list check as the explicit-faultPort branch, so a
+            // configured allowedFaultPorts restriction cannot be bypassed via faultType.
+            if (!isFaultPortAllowed(resolved)) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(Map.of(
+                        "error", "faultPort " + resolved + " is not an allowed Rodriguez fault port")));
                 return;
             }
             faultPort = resolved;

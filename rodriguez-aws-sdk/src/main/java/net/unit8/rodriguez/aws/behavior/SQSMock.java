@@ -93,11 +93,11 @@ public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
             );
         } catch (BodyTooLargeException e) {
             LOG.warning("SQSMock body too large: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "body-too-large"));
+            getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "body-too-large")).inc();
             sendError(exchange, 413);
         } catch (Exception e) {
             LOG.severe("SQSMock error: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "other-error"));
+            getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "other-error")).inc();
             sendError(exchange, 400);
         } finally {
             exchange.close();

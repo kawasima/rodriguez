@@ -124,16 +124,22 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
             } else if (response == null) {
                 exchange.sendResponseHeaders(200, -1);
             } else if (response instanceof File f) {
-                exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
-                exchange.sendResponseHeaders(200, f.length());
-                byte[] buffer = new byte[4096];
-                try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f))) {
-                    while (true) {
-                        int read = in.read(buffer);
-                        if (read <= 0) {
-                            break;
+                if (!f.isFile() || !f.canRead()) {
+                    // Object does not exist: send 404 before committing 200 headers,
+                    // otherwise the client would see an empty 200 when the stream fails.
+                    sendError(exchange, ErrorResponse.notFound());
+                } else {
+                    exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+                    exchange.sendResponseHeaders(200, f.length());
+                    byte[] buffer = new byte[4096];
+                    try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f))) {
+                        while (true) {
+                            int read = in.read(buffer);
+                            if (read <= 0) {
+                                break;
+                            }
+                            exchange.getResponseBody().write(buffer, 0, read);
                         }
-                        exchange.getResponseBody().write(buffer, 0, read);
                     }
                 }
             } else {
@@ -144,15 +150,15 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
             }
         } catch (S3AccessDeniedException e) {
             LOG.warning("S3Mock access denied: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "access-denied"));
+            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "access-denied")).inc();
             sendError(exchange, ErrorResponse.forbidden());
         } catch (BodyTooLargeException e) {
             LOG.warning("S3Mock body too large: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "body-too-large"));
+            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "body-too-large")).inc();
             sendError(exchange, ErrorResponse.payloadTooLarge());
         } catch (Exception e) {
             LOG.severe("S3Mock error: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "other-error"));
+            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "other-error")).inc();
             try {
                 exchange.sendResponseHeaders(500, -1);
             } catch(IOException ignore) {

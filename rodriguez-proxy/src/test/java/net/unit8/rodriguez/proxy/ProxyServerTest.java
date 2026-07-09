@@ -422,6 +422,22 @@ class ProxyServerTest {
     }
 
     @Test
+    void createRuleWithOversizedBodyReturns413() throws Exception {
+        // A POST to the management API larger than the configured limit must be rejected
+        // before JSON parsing, so it cannot OOM the control port.
+        byte[] oversized = new byte[(int) (10L * 1024 * 1024) + 1];
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(oversized))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(413);
+    }
+
+    @Test
     void ruleExpiresAfterDuration() throws Exception {
         // Create a rule with 1-second TTL matching /api/hello
         Map<String, Object> ruleMap = new LinkedHashMap<>();

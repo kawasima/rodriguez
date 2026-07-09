@@ -43,7 +43,11 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
     private static final Pattern BUCKET_PATH = Pattern.compile("^/storage/v1/b/([^/]+)$");
     private static final Pattern BUCKETS_PATH = Pattern.compile("^/storage/v1/b/?$");
 
+    /** Maximum accepted size for a metadata (non-upload) request body (64 MB). */
+    static final long MAX_METADATA_BODY_SIZE = 64L * 1024 * 1024;
+
     private final ObjectMapper mapper;
+    private final long maxMetadataBodySize;
     private File gcsDirectory;
 
     /**
@@ -51,8 +55,18 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
      * configured for Java time serialization.
      */
     public GCSMock() {
+        this(MAX_METADATA_BODY_SIZE);
+    }
+
+    /**
+     * Creates a new GCSMock instance with an explicit metadata body size cap.
+     *
+     * @param maxMetadataBodySize the maximum accepted size for a non-upload request body
+     */
+    GCSMock(long maxMetadataBodySize) {
         mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
+        this.maxMetadataBodySize = maxMetadataBodySize;
     }
 
     private synchronized void ensureGcsDirectory() {
@@ -80,7 +94,7 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
 
             // Handle bucket name from JSON body for CreateBucket (POST /storage/v1/b)
             if ("POST".equals(request.getMethod()) && !path.startsWith("/upload/")) {
-                byte[] body = request.getBody().readAllBytes();
+                byte[] body = readBounded(request.getBody(), maxMetadataBodySize);
                 if (body.length > 0) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> json = mapper.readValue(body, Map.class);
@@ -124,14 +138,14 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
             }
         } catch (GCSException e) {
             LOG.warning("GCSMock: " + e.getStatusCode() + " " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "client-error"));
+            getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "client-error")).inc();
             try {
                 sendError(exchange, e.getStatusCode(), e.getMessage());
             } catch (IOException ignore) {
             }
         } catch (Exception e) {
             LOG.severe("GCSMock error: " + e.getMessage());
-            getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "other-error"));
+            getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "other-error")).inc();
             try {
                 exchange.sendResponseHeaders(500, -1);
             } catch (IOException ignore) {
@@ -162,6 +176,28 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(status, body.length);
         exchange.getResponseBody().write(body);
+    }
+
+    /**
+     * Reads the request body into memory, bounded by {@code limit}, so that a
+     * chunked body with no {@code Content-Length} cannot exhaust the heap. Reads
+     * at most {@code limit + 1} bytes and rejects anything larger with a 413.
+     *
+     * @param in    the request body stream
+     * @param limit the maximum accepted body size in bytes
+     * @return the body bytes (never larger than {@code limit})
+     * @throws GCSException if the body exceeds {@code limit}
+     */
+    private static byte[] readBounded(InputStream in, long limit) throws IOException {
+        // Bound the in-memory buffer to a Java array's capacity and detect
+        // overflow of `limit + 1` explicitly.
+        long effectiveLimit = Math.min(limit, (long) Integer.MAX_VALUE - 8);
+        int cap = (int) (effectiveLimit + 1);
+        byte[] data = in.readNBytes(cap);
+        if (data.length > effectiveLimit) {
+            throw new GCSException(413, "Request body exceeds maximum allowed size of " + effectiveLimit + " bytes");
+        }
+        return data;
     }
 
     private void parsePath(GCSRequest request, String path) {

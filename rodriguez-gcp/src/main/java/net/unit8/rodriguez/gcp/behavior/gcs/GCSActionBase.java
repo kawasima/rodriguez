@@ -4,6 +4,9 @@ import net.unit8.rodriguez.gcp.GCSException;
 import net.unit8.rodriguez.gcp.GCSRequest;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -96,6 +99,33 @@ public abstract class GCSActionBase<T> implements GCSMockAction<T> {
         if (!resolved.startsWith(base)) {
             throw new GCSException(400, "Invalid name (path traversal rejected): " + child);
         }
+        // The lexical check above cannot see symlinks: a link inside the storage
+        // root can still point outside it. As a best-effort defense, resolve the
+        // nearest existing ancestor of the target to its real path and confirm it
+        // stays under the base's real path. Not-yet-existing object paths are
+        // permitted (only the existing prefix is checked), so writes to new nested
+        // objects continue to resolve normally.
+        verifyRealPathWithin(base, resolved, child);
         return resolved;
+    }
+
+    private static void verifyRealPathWithin(Path base, Path resolved, String child) {
+        try {
+            Path existing = resolved;
+            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+                existing = existing.getParent();
+            }
+            if (existing == null) {
+                return;
+            }
+            Path baseReal = base.toRealPath();
+            Path existingReal = existing.toRealPath();
+            if (!existingReal.startsWith(baseReal)) {
+                throw new GCSException(400, "Invalid name (path traversal rejected): " + child);
+            }
+        } catch (IOException e) {
+            // Real paths could not be resolved (e.g. the base does not exist yet);
+            // fall back to the lexical containment check already performed above.
+        }
     }
 }

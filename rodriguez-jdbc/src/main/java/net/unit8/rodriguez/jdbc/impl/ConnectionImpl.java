@@ -54,8 +54,13 @@ public class ConnectionImpl implements Connection {
         } catch (IllegalArgumentException e) {
             throw new SQLException("Invalid Rodriguez JDBC URL: " + url, e);
         }
+        final String host = uri.getHost();
+        final int port = uri.getPort();
+        if (host == null || host.isEmpty() || port < 1 || port > 65535) {
+            throw new SQLException("Invalid Rodriguez JDBC URL: " + url + " (host and port required)");
+        }
         try {
-            socket = new Socket(uri.getHost(), uri.getPort());
+            socket = new Socket(host, port);
         } catch (IOException e) {
             throw new SQLException(e);
         }

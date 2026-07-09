@@ -80,6 +80,9 @@ public class ProxyHandler implements HttpHandler {
             targetBase = config.getUpstream();
         }
 
+        // Tracks whether we have already begun the response, so the error handlers below
+        // don't attempt to send a 502 status after headers/body have started streaming.
+        boolean responseStarted = false;
         try {
             String query = exchange.getRequestURI().getRawQuery();
             String targetUri = targetBase + path + (query != null ? "?" + query : "");
@@ -123,9 +126,11 @@ public class ProxyHandler implements HttpHandler {
                     : HttpRequest.BodyPublishers.noBody();
             reqBuilder.method(method, bodyPublisher);
 
-            HttpResponse<byte[]> upstreamResponse = httpClient.send(
+            // Stream the response instead of buffering it fully, so pointing a rule at the
+            // OversizedResponse fault port (or any large-body upstream) cannot OOM the proxy.
+            HttpResponse<InputStream> upstreamResponse = httpClient.send(
                     reqBuilder.build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
+                    HttpResponse.BodyHandlers.ofInputStream());
 
             int statusCode = upstreamResponse.statusCode();
             if (matchedRule.isEmpty() && statusCode >= 200 && statusCode < 400) {
@@ -138,20 +143,43 @@ public class ProxyHandler implements HttpHandler {
                 }
             });
 
-            byte[] responseBody = upstreamResponse.body();
-            exchange.sendResponseHeaders(statusCode,
-                    responseBody != null && responseBody.length > 0 ? responseBody.length : -1);
-            if (responseBody != null && responseBody.length > 0) {
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(responseBody);
+            long maxResponseBytes = config.getMaxRequestBodyBytes();
+            boolean bodyAllowed = statusCode != 204 && statusCode != 304
+                    && !"HEAD".equalsIgnoreCase(method);
+            responseStarted = true;
+            // Length 0 selects chunked transfer encoding, letting us stream an
+            // unknown-length body without buffering it; -1 means "no body".
+            exchange.sendResponseHeaders(statusCode, bodyAllowed ? 0 : -1);
+            try (InputStream upstreamBody = upstreamResponse.body()) {
+                if (bodyAllowed) {
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        byte[] chunk = new byte[8192];
+                        long total = 0;
+                        int read;
+                        while ((read = upstreamBody.read(chunk)) != -1) {
+                            total += read;
+                            if (total > maxResponseBytes) {
+                                // Never forward an unbounded response; truncate and stop so the
+                                // proxy's memory stays bounded even for a hostile upstream.
+                                LOG.warning("Upstream response for " + method + " " + path
+                                        + " exceeded " + maxResponseBytes + " bytes; truncating");
+                                break;
+                            }
+                            os.write(chunk, 0, read);
+                        }
+                    }
                 }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            exchange.sendResponseHeaders(502, -1);
+            if (!responseStarted) {
+                exchange.sendResponseHeaders(502, -1);
+            }
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Proxy error for " + method + " " + path, e);
-            exchange.sendResponseHeaders(502, -1);
+            if (!responseStarted) {
+                exchange.sendResponseHeaders(502, -1);
+            }
         } finally {
             exchange.close();
         }

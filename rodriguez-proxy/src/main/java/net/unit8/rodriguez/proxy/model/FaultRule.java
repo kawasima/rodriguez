@@ -28,7 +28,62 @@ public class FaultRule {
      */
     public static final int MAX_MATCH_INPUT_LENGTH = 4000;
 
+    /**
+     * Maximum number of {@code charAt} accesses the regex engine may perform for a single
+     * {@link #matches(String)} call. Catastrophic backtracking (e.g. {@code (a+)+$}) re-reads
+     * input characters exponentially; capping the accesses aborts such a match in bounded time
+     * instead of pinning a CPU. The budget is generous enough that any linear-time match over
+     * a {@link #MAX_MATCH_INPUT_LENGTH}-char input completes normally.
+     */
+    private static final long MAX_MATCH_STEPS = 500_000L;
+
     private static final Pattern DURATION_SHORTHAND = Pattern.compile("(\\d+)([smh])");
+
+    /** Thrown internally when a match exceeds {@link #MAX_MATCH_STEPS}; treated as a non-match. */
+    private static final class StepBudgetExceededException extends RuntimeException {
+        StepBudgetExceededException() {
+            super(null, null, false, false);
+        }
+    }
+
+    /**
+     * A read-only {@link CharSequence} view whose {@code charAt} increments a step counter and
+     * throws {@link StepBudgetExceededException} once the budget is exhausted. Wrapping the match
+     * input in this bounds the total work a pathological pattern can perform.
+     */
+    private static final class StepBoundedCharSequence implements CharSequence {
+        private final CharSequence delegate;
+        private final long maxSteps;
+        private long steps;
+
+        StepBoundedCharSequence(CharSequence delegate, long maxSteps) {
+            this.delegate = delegate;
+            this.maxSteps = maxSteps;
+        }
+
+        @Override
+        public int length() {
+            return delegate.length();
+        }
+
+        @Override
+        public char charAt(int index) {
+            if (++steps > maxSteps) {
+                throw new StepBudgetExceededException();
+            }
+            return delegate.charAt(index);
+        }
+
+        @Override
+        public CharSequence subSequence(int start, int end) {
+            return delegate.subSequence(start, end);
+        }
+
+        @Override
+        public String toString() {
+            return delegate.toString();
+        }
+    }
 
     private final String id;
     private final String pathPattern;
@@ -85,7 +140,14 @@ public class FaultRule {
         if (path == null || path.length() > MAX_MATCH_INPUT_LENGTH) {
             return false;
         }
-        return compiledPattern.matcher(path).matches();
+        try {
+            return compiledPattern.matcher(
+                    new StepBoundedCharSequence(path, MAX_MATCH_STEPS)).matches();
+        } catch (StepBudgetExceededException e) {
+            // A pathological pattern/input blew the step budget; treat it as a non-match
+            // rather than pinning the CPU on every proxied request.
+            return false;
+        }
     }
 
     /**
