@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
+import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.text.ParseException;
@@ -28,9 +29,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the int value
+     * @throws SQLException if the string cannot be parsed as an int
      */
-    public static int toInt(String s) {
-        return Integer.parseInt(s);
+    public static int toInt(String s) throws SQLException {
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to int", e);
+        }
     }
 
     /**
@@ -48,9 +54,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the byte value
+     * @throws SQLException if the string cannot be parsed as a byte
      */
-    public static byte toByte(String s) {
-        return Byte.parseByte(s);
+    public static byte toByte(String s) throws SQLException {
+        try {
+            return Byte.parseByte(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to byte", e);
+        }
     }
 
     /**
@@ -58,9 +69,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the short value
+     * @throws SQLException if the string cannot be parsed as a short
      */
-    public static short toShort(String s) {
-        return Short.parseShort(s);
+    public static short toShort(String s) throws SQLException {
+        try {
+            return Short.parseShort(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to short", e);
+        }
     }
 
     /**
@@ -68,9 +84,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the long value
+     * @throws SQLException if the string cannot be parsed as a long
      */
-    public static long toLong(String s) {
-        return Long.parseLong(s);
+    public static long toLong(String s) throws SQLException {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to long", e);
+        }
     }
 
     /**
@@ -78,9 +99,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the float value
+     * @throws SQLException if the string cannot be parsed as a float
      */
-    public static float toFloat(String s) {
-        return Float.parseFloat(s);
+    public static float toFloat(String s) throws SQLException {
+        try {
+            return Float.parseFloat(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to float", e);
+        }
     }
 
     /**
@@ -88,9 +114,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the Double value
+     * @throws SQLException if the string cannot be parsed as a double
      */
-    public static Double toDouble(String s) {
-        return Double.parseDouble(s);
+    public static Double toDouble(String s) throws SQLException {
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to double", e);
+        }
     }
 
     /**
@@ -98,9 +129,14 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the BigDecimal value
+     * @throws SQLException if the string cannot be parsed as a BigDecimal
      */
-    public static BigDecimal toBigDecimal(String s) {
-        return new BigDecimal(s);
+    public static BigDecimal toBigDecimal(String s) throws SQLException {
+        try {
+            return new BigDecimal(s);
+        } catch (NumberFormatException e) {
+            throw new SQLException("Cannot convert '" + s + "' to BigDecimal", e);
+        }
     }
 
     /**
@@ -118,12 +154,13 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the SQL Date value
+     * @throws SQLException if the string cannot be parsed as a date
      */
-    public static Date toDate(String s) {
+    public static Date toDate(String s) throws SQLException {
         try {
             return new Date(StdDateFormat.getDateInstance().parse(s).getTime());
         } catch (ParseException e) {
-            throw new IllegalArgumentException(e);
+            throw new SQLException("Cannot convert '" + s + "' to Date", e);
         }
     }
 
@@ -132,12 +169,13 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the SQL Time value
+     * @throws SQLException if the string cannot be parsed as a time
      */
-    public static Time toTime(String s) {
+    public static Time toTime(String s) throws SQLException {
         try {
             return new Time(StdDateFormat.getTimeInstance().parse(s).getTime());
         } catch (ParseException e) {
-            throw new IllegalArgumentException(s);
+            throw new SQLException("Cannot convert '" + s + "' to Time", e);
         }
     }
 
@@ -146,12 +184,13 @@ public class TypeConverter {
      *
      * @param s the string to convert
      * @return the SQL Timestamp value
+     * @throws SQLException if the string cannot be parsed as a timestamp
      */
-    public static Timestamp toTimestamp(String s) {
+    public static Timestamp toTimestamp(String s) throws SQLException {
         try {
             return new Timestamp(StdDateFormat.getDateTimeInstance().parse(s).getTime());
         } catch (ParseException e) {
-            throw new IllegalArgumentException(s);
+            throw new SQLException("Cannot convert '" + s + "' to Timestamp", e);
         }
     }
 

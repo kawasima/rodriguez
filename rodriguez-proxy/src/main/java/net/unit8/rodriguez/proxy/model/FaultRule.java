@@ -15,7 +15,75 @@ import java.util.regex.Pattern;
  * An optional {@code duration} causes the rule to expire after the specified time.
  */
 public class FaultRule {
+    /**
+     * Maximum accepted length of a {@code pathPattern} regex. A short cap on both the
+     * pattern and the matched input materially reduces the blast radius of a
+     * catastrophic-backtracking (ReDoS) pattern such as {@code (a+)+$}.
+     */
+    public static final int MAX_PATTERN_LENGTH = 1000;
+
+    /**
+     * Maximum request-path length matched against a pattern. Longer paths are treated
+     * as non-matching rather than fed to the regex engine, bounding backtracking cost.
+     */
+    public static final int MAX_MATCH_INPUT_LENGTH = 4000;
+
+    /**
+     * Maximum number of {@code charAt} accesses the regex engine may perform for a single
+     * {@link #matches(String)} call. Catastrophic backtracking (e.g. {@code (a+)+$}) re-reads
+     * input characters exponentially; capping the accesses aborts such a match in bounded time
+     * instead of pinning a CPU. The budget is generous enough that any linear-time match over
+     * a {@link #MAX_MATCH_INPUT_LENGTH}-char input completes normally.
+     */
+    private static final long MAX_MATCH_STEPS = 500_000L;
+
     private static final Pattern DURATION_SHORTHAND = Pattern.compile("(\\d+)([smh])");
+
+    /** Thrown internally when a match exceeds {@link #MAX_MATCH_STEPS}; treated as a non-match. */
+    private static final class StepBudgetExceededException extends RuntimeException {
+        StepBudgetExceededException() {
+            super(null, null, false, false);
+        }
+    }
+
+    /**
+     * A read-only {@link CharSequence} view whose {@code charAt} increments a step counter and
+     * throws {@link StepBudgetExceededException} once the budget is exhausted. Wrapping the match
+     * input in this bounds the total work a pathological pattern can perform.
+     */
+    private static final class StepBoundedCharSequence implements CharSequence {
+        private final CharSequence delegate;
+        private final long maxSteps;
+        private long steps;
+
+        StepBoundedCharSequence(CharSequence delegate, long maxSteps) {
+            this.delegate = delegate;
+            this.maxSteps = maxSteps;
+        }
+
+        @Override
+        public int length() {
+            return delegate.length();
+        }
+
+        @Override
+        public char charAt(int index) {
+            if (++steps > maxSteps) {
+                throw new StepBudgetExceededException();
+            }
+            return delegate.charAt(index);
+        }
+
+        @Override
+        public CharSequence subSequence(int start, int end) {
+            return delegate.subSequence(start, end);
+        }
+
+        @Override
+        public String toString() {
+            return delegate.toString();
+        }
+    }
 
     private final String id;
     private final String pathPattern;
@@ -48,6 +116,10 @@ public class FaultRule {
      * @param durationString TTL in shorthand format (e.g., "30s", "5m", "1h"), or null for no expiry
      */
     public FaultRule(String pathPattern, String faultType, int faultPort, int count, String durationString) {
+        if (pathPattern != null && pathPattern.length() > MAX_PATTERN_LENGTH) {
+            throw new IllegalArgumentException(
+                    "pathPattern exceeds maximum length of " + MAX_PATTERN_LENGTH);
+        }
         this.id = UUID.randomUUID().toString();
         this.pathPattern = pathPattern;
         this.compiledPattern = Pattern.compile(pathPattern);
@@ -65,7 +137,17 @@ public class FaultRule {
      * @return true if the path matches
      */
     public boolean matches(String path) {
-        return compiledPattern.matcher(path).matches();
+        if (path == null || path.length() > MAX_MATCH_INPUT_LENGTH) {
+            return false;
+        }
+        try {
+            return compiledPattern.matcher(
+                    new StepBoundedCharSequence(path, MAX_MATCH_STEPS)).matches();
+        } catch (StepBudgetExceededException e) {
+            // A pathological pattern/input blew the step budget; treat it as a non-match
+            // rather than pinning the CPU on every proxied request.
+            return false;
+        }
     }
 
     /**

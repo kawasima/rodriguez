@@ -21,8 +21,7 @@ public class ListObjectsAction extends GCSActionBase<Map<String, Object>> {
     public Map<String, Object> handle(GCSRequest request) {
         String bucketName = request.getQueryParam("_bucketName");
 
-        List<Map<String, Object>> items = Optional.ofNullable(getGcsDirectory())
-                .map(dir -> new File(dir, bucketName))
+        List<Map<String, Object>> items = Optional.of(resolveBucketPath(bucketName).toFile())
                 .filter(File::isDirectory)
                 .map(File::listFiles)
                 .map(files -> Arrays.stream(files)

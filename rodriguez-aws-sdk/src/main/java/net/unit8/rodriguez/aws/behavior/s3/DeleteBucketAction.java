@@ -26,7 +26,7 @@ public class DeleteBucketAction extends S3ActionBase<Void>{
     public Void handle(AWSRequest params) {
         Optional.ofNullable(params.getParams().getFirst("BucketName"))
                 .ifPresent(bucket -> {
-                    try (Stream<Path> path = Files.walk(getS3Directory().toPath().resolve(bucket))) {
+                    try (Stream<Path> path = Files.walk(resolveBucketPath(bucket))) {
                         path.sorted(Comparator.reverseOrder())
                                 .map(Path::toFile)
                                 .forEach(File::delete);

@@ -13,7 +13,10 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.net.ConnectException;
+import java.net.Socket;
 import java.sql.*;
 import java.util.HashSet;
 import java.util.Map;
@@ -50,6 +53,16 @@ class RodriguezConnectionTest {
         }).isInstanceOf(HikariPool.PoolInitializationException.class)
                 .hasCauseInstanceOf(SQLException.class)
                 .hasRootCauseInstanceOf(ConnectException.class);
+    }
+
+    @Test
+    void portlessUrlThrowsSqlExceptionNotIllegalArgument() {
+        // A JDBC URL without a port (uri.getPort() == -1) must surface as a SQLException,
+        // not an unchecked IllegalArgumentException from new Socket(host, -1).
+        assertThatThrownBy(() -> new ConnectionImpl("jdbc:rodriguez://localhost", new java.util.Properties()))
+                .isInstanceOf(SQLException.class)
+                .isNotInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("host and port required");
     }
 
     @Test
@@ -91,6 +104,53 @@ class RodriguezConnectionTest {
             assertThat(rs.next()).isTrue();
             assertThat(rs.getString("id")).isEqualTo("5");
             assertThat(rs.next()).isFalse();
+        }
+    }
+
+    @Test
+    void statementExecuteSelectStar() throws SQLException {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:rodriguez://localhost:10202");
+        HikariDataSource ds = new HikariDataSource(config);
+
+        // SELECT * yields a single "*" select-list item, but the server must serve rows
+        // driven by the CSV columns (id, name) it advertised as metadata. Otherwise the
+        // client and server disagree on the per-row value count and the client hangs.
+        try (Connection conn = ds.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM dual")) {
+            assertThat(rs.getMetaData().getColumnCount()).isEqualTo(2);
+            int count = 0;
+            while (rs.next()) {
+                count++;
+                assertThat(rs.getString("id")).isEqualTo(Integer.toString(count));
+                assertThat(rs.getString("name")).isNotEmpty();
+            }
+            assertThat(count).isEqualTo(5);
+        }
+    }
+
+    @Test
+    void resultSetNextBeforeQueryDoesNotCrashHandler() throws Exception {
+        // A misbehaving client sending RS_NEXT before EXECUTE_QUERY must not kill the
+        // handler thread with an NPE. The server should respond cleanly (no rows) and
+        // remain usable for a subsequent, well-formed query on the same connection.
+        try (Socket socket = new Socket("localhost", 10202)) {
+            socket.setSoTimeout(5000);
+            DataOutputStream os = new DataOutputStream(socket.getOutputStream());
+            DataInputStream is = new DataInputStream(socket.getInputStream());
+
+            os.writeInt(JDBCCommand.RS_NEXT.ordinal());
+            os.flush();
+            assertThat(is.readInt()).isEqualTo(JDBCCommandStatus.SUCCESS.ordinal());
+            assertThat(is.readBoolean()).isFalse();
+
+            // The connection survived: a normal query still works.
+            os.writeInt(JDBCCommand.EXECUTE_QUERY.ordinal());
+            os.writeUTF("SELECT id, name FROM dual");
+            os.flush();
+            assertThat(is.readInt()).isEqualTo(JDBCCommandStatus.SUCCESS.ordinal());
+            assertThat(is.readInt()).isEqualTo(2);
         }
     }
 
