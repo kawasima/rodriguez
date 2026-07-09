@@ -36,7 +36,9 @@ public final class BoundedBody {
      * @throws BodyTooLargeException if the body exceeds the effective limit
      */
     public static byte[] read(InputStream in, long limit) throws IOException {
-        long effectiveLimit = Math.min(limit, (long) Integer.MAX_VALUE - 8);
+        // Clamp to [0, array capacity] so a misconfigured negative limit yields a
+        // deterministic "0 bytes allowed" rather than depending on signed overflow.
+        long effectiveLimit = Math.max(0, Math.min(limit, (long) Integer.MAX_VALUE - 8));
         int cap = (int) (effectiveLimit + 1);
         byte[] data = in.readNBytes(cap);
         if (data.length > effectiveLimit) {

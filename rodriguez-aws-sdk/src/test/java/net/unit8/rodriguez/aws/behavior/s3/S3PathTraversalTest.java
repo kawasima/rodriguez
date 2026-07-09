@@ -127,6 +127,26 @@ class S3PathTraversalTest {
     }
 
     @Test
+    void rejectsObjectNameEscapingBucketViaSymlinkToSiblingBucket() throws Exception {
+        // A symlink inside bucket-a that points at sibling bucket-b (still within the
+        // storage root) must not let an object key in bucket-a redirect into bucket-b.
+        Path bucketA = root.toPath().resolve("bucket-a");
+        Path bucketB = root.toPath().resolve("bucket-b");
+        Files.createDirectories(bucketA);
+        Files.createDirectories(bucketB);
+        Files.writeString(bucketB.resolve("secret.txt"), "secret");
+        Path link = bucketA.resolve("link");
+        try {
+            Files.createSymbolicLink(link, bucketB);
+        } catch (UnsupportedOperationException | java.io.IOException e) {
+            org.junit.jupiter.api.Assumptions.abort("Symbolic links are not supported on this platform");
+            return;
+        }
+        assertThatThrownBy(() -> action.object("bucket-a", "link/secret.txt"))
+                .isInstanceOf(S3AccessDeniedException.class);
+    }
+
+    @Test
     void allowsNormalNames() {
         // Use Path#startsWith (pure lexical prefix check) rather than AssertJ's
         // PathAssert#startsWith, which calls toRealPath() and would require the

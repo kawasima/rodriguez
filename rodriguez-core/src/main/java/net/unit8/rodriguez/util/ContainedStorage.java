@@ -79,8 +79,21 @@ public final class ContainedStorage {
         Path rootReal = storageRootReal(root);
         Path bucketPath = PathContainment.resolveWithin(root, rootReal, bucketName, false)
                 .orElseThrow(() -> errors.invalidName("bucket", bucketName));
-        return PathContainment.resolveWithin(bucketPath, rootReal, objectName, false)
+        // Bound the object to the bucket's OWN real path, not just the storage root, so a
+        // symlink inside the bucket cannot redirect the key into a sibling bucket while
+        // still satisfying the root boundary. Fall back to the root boundary when the
+        // bucket directory does not exist yet (nothing to redirect through).
+        Path objectBoundary = realPathOrElse(bucketPath, rootReal);
+        return PathContainment.resolveWithin(bucketPath, objectBoundary, objectName, false)
                 .orElseThrow(() -> errors.invalidName("object", objectName));
+    }
+
+    private static Path realPathOrElse(Path path, Path fallback) {
+        try {
+            return path.toRealPath();
+        } catch (IOException e) {
+            return fallback;
+        }
     }
 
     private Path storageRoot() {

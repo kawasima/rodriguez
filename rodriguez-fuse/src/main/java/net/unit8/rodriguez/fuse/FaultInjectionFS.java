@@ -230,12 +230,15 @@ public class FaultInjectionFS extends FuseStubFS {
             if (offset >= fileSize) {
                 return 0;
             }
-            int bytesToRead = (int) Math.min(size, fileSize - offset);
+            // Clamp to a safe int: FUSE bounds a single read well below 2 GB, but the
+            // cast must not overflow to a negative/wrong size for ByteBuffer.allocate.
+            int bytesToRead = (int) Math.min(Math.min(size, fileSize - offset), (long) Integer.MAX_VALUE);
             ByteBuffer bb = ByteBuffer.allocate(bytesToRead);
             int total = 0;
             while (total < bytesToRead) {
                 int n = channel.read(bb, offset + total);
-                if (n < 0) {
+                if (n <= 0) {
+                    // EOF (-1) or, defensively, a 0-byte read: stop rather than spin.
                     break;
                 }
                 total += n;
@@ -274,7 +277,9 @@ public class FaultInjectionFS extends FuseStubFS {
         // offset. This avoids the O(N^2) read-modify-write of the whole file, keeps
         // offset as a long (no int truncation for offsets near/above 2GB), and lets
         // concurrent writes to disjoint ranges coexist without last-writer-wins loss.
-        int len = (int) size;
+        // Clamp to a safe int: FUSE bounds a single write well below 2 GB, but the cast
+        // must not overflow to a negative length for the array allocation below.
+        int len = (int) Math.min(size, (long) Integer.MAX_VALUE);
         byte[] data = new byte[len];
         buf.get(0, data, 0, len);
 
@@ -284,7 +289,8 @@ public class FaultInjectionFS extends FuseStubFS {
             int total = 0;
             while (bb.hasRemaining()) {
                 int n = channel.write(bb, offset + total);
-                if (n < 0) {
+                if (n <= 0) {
+                    // Defensively stop on a 0-byte write rather than spin forever.
                     break;
                 }
                 total += n;
