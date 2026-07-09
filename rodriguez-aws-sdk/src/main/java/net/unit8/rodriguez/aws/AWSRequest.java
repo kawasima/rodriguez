@@ -3,6 +3,7 @@ package net.unit8.rodriguez.aws;
 import com.amazonaws.HttpMethod;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import net.unit8.rodriguez.util.BoundedBody;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,6 +22,31 @@ import java.util.stream.Stream;
  * {@link #of(HttpExchange)} factory methods.</p>
  */
 public class AWSRequest implements Serializable {
+    /**
+     * Maximum number of bytes read from a request body into memory.
+     *
+     * <p>Guards the mock against out-of-memory conditions caused by unbounded
+     * uploads. Defaults to {@link BoundedBody#DEFAULT_MAX_BODY_SIZE} (64 MB).</p>
+     */
+    public static final int MAX_BODY_SIZE = (int) BoundedBody.DEFAULT_MAX_BODY_SIZE;
+
+    /**
+     * Reads the given input stream fully into memory, rejecting bodies larger
+     * than {@link #MAX_BODY_SIZE}.
+     *
+     * @param in the input stream to read
+     * @return the body bytes
+     * @throws IOException            if an I/O error occurs
+     * @throws BodyTooLargeException  if the body exceeds {@link #MAX_BODY_SIZE}
+     */
+    public static byte[] readBoundedBytes(InputStream in) throws IOException {
+        try {
+            return BoundedBody.read(in, MAX_BODY_SIZE);
+        } catch (net.unit8.rodriguez.util.BodyTooLargeException e) {
+            throw new BodyTooLargeException(e.getMessage());
+        }
+    }
+
     /** The parsed request parameters. */
     private final RequestParams params;
     /** The HTTP method of the request. */
@@ -109,7 +135,7 @@ public class AWSRequest implements Serializable {
                         .filter(contentType -> contentType.startsWith("application/x-www-form-urlencoded"))
                         .map(type -> {
                             try {
-                                return new RequestParams(new String(body.readAllBytes(), StandardCharsets.UTF_8));
+                                return new RequestParams(new String(readBoundedBytes(body), StandardCharsets.UTF_8));
                             } catch (IOException e) {
                                 throw new UncheckedIOException(e);
                             }

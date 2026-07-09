@@ -8,7 +8,8 @@ import net.unit8.rodriguez.metrics.MetricRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * An instability behavior that operates at the HTTP level.
@@ -18,10 +19,11 @@ import java.util.concurrent.Executor;
  */
 public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAvailable {
     @Override
-    default Runnable createServer(Executor executor, int port) {
+    default Runnable createServer(int port) {
         InetSocketAddress address = new InetSocketAddress(port);
         try {
             HttpServer httpServer = HttpServer.create(address, 0);
+            ExecutorService executor = Executors.newCachedThreadPool();
             httpServer.setExecutor(executor);
             httpServer.createContext("/", exchange -> {
                 try {
@@ -32,7 +34,10 @@ public interface HttpInstabilityBehavior extends InstabilityBehavior, MetricsAva
                 }
             });
             httpServer.start();
-            return () -> httpServer.stop(0);
+            return () -> {
+                httpServer.stop(0);
+                executor.shutdownNow();
+            };
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
