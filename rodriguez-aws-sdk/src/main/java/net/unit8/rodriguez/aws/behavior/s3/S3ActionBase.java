@@ -1,11 +1,10 @@
 package net.unit8.rodriguez.aws.behavior.s3;
 
 import net.unit8.rodriguez.aws.MockAction;
+import net.unit8.rodriguez.util.PathContainment;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,70 +66,45 @@ public abstract class S3ActionBase<T> implements MockAction<T> {
      *                                 invalid, or the resolved path escapes the root
      */
     protected Path resolveBucketPath(String bucketName) {
-        return resolveWithin(bucketName);
+        Path root = storageRoot();
+        return PathContainment.resolveWithin(root, storageRootReal(root), bucketName, false)
+                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe bucket name: " + bucketName));
     }
 
     /**
      * Safely resolves an object file under the given bucket within the S3 storage root.
      *
+     * <p>The object name is contained within its <em>bucket</em> directory (not merely
+     * the storage root), so an object key such as {@code ../other-bucket/key} cannot
+     * cross into a sibling bucket.
+     *
      * @param bucketName the bucket name from the request
      * @param objectName the object name from the request
-     * @return the resolved object path, guaranteed to be contained within the storage root
+     * @return the resolved object path, guaranteed to be contained within its bucket directory
      * @throws S3AccessDeniedException if the storage root is unset, a name is
-     *                                 invalid, or the resolved path escapes the root
+     *                                 invalid, or the resolved path escapes its container
      */
     protected Path resolveObjectPath(String bucketName, String objectName) {
-        return resolveWithin(bucketName, objectName);
+        Path root = storageRoot();
+        Path rootReal = storageRootReal(root);
+        Path bucketPath = PathContainment.resolveWithin(root, rootReal, bucketName, false)
+                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe bucket name: " + bucketName));
+        return PathContainment.resolveWithin(bucketPath, rootReal, objectName, false)
+                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe object name: " + objectName));
     }
 
-    /**
-     * Resolves the given path segments under the normalized storage root and
-     * verifies that the result stays inside it, rejecting {@code ..} / absolute
-     * escapes so that no request can read, write, or delete files outside the root.
-     */
-    private Path resolveWithin(String... segments) {
+    private Path storageRoot() {
         if (s3Directory == null) {
             throw new S3AccessDeniedException("S3 storage directory is not configured");
         }
-        Path root = s3Directory.toPath().toAbsolutePath().normalize();
-        Path resolved = root;
-        for (String segment : segments) {
-            if (segment == null || segment.isEmpty() || segment.equals("..")) {
-                throw new S3AccessDeniedException("Invalid path segment: " + segment);
-            }
-            resolved = resolved.resolve(segment);
-        }
-        resolved = resolved.normalize();
-        if (!resolved.startsWith(root)) {
-            throw new S3AccessDeniedException("Resolved path escapes the storage root: " + resolved);
-        }
-        verifyRealPathWithin(root, resolved);
-        return resolved;
+        return s3Directory.toPath().toAbsolutePath().normalize();
     }
 
-    /**
-     * Best-effort symlink defense on top of the lexical containment check above.
-     * The lexical check cannot detect a symlink inside the storage root that points
-     * outside it, so this resolves the real path of the target (or, for a not-yet-created
-     * object, its nearest existing ancestor) and verifies it is still contained within
-     * the storage root's real path. Not-yet-existing keys keep resolving normally because
-     * only the existing prefix is checked.
-     */
-    private void verifyRealPathWithin(Path root, Path resolved) {
+    private Path storageRootReal(Path root) {
         try {
-            Path existing = resolved;
-            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-                existing = existing.getParent();
-            }
-            if (existing == null) {
-                return;
-            }
-            if (!existing.toRealPath().startsWith(root.toRealPath())) {
-                throw new S3AccessDeniedException(
-                        "Resolved path escapes the storage root via symlink: " + resolved);
-            }
+            return root.toRealPath();
         } catch (IOException e) {
-            throw new S3AccessDeniedException("Failed to verify path containment: " + resolved);
+            throw new S3AccessDeniedException("Failed to resolve S3 storage root: " + e.getMessage());
         }
     }
 }

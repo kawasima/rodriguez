@@ -121,6 +121,11 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
                 // 204 No Content for delete operations
                 exchange.sendResponseHeaders(204, -1);
             } else if (response instanceof File f) {
+                if (!f.isFile() || !f.canRead()) {
+                    // Object does not exist: send 404 before committing 200 headers,
+                    // otherwise the client would see an empty 200 when the stream fails.
+                    throw new GCSException(404, "No such object");
+                }
                 exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
                 exchange.sendResponseHeaders(200, f.length());
                 byte[] buffer = new byte[4096];

@@ -37,6 +37,9 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
     private static final int HEARTBEAT_INTERVAL_SECONDS = 30;
     /** Per-client queue capacity. When full, the client is treated as a stalled reader and dropped. */
     private static final int CLIENT_QUEUE_CAPACITY = 1024;
+    /** Upper bound on concurrent SSE clients, so a client opening connections in a loop
+     * cannot spawn unbounded writer threads and queues. */
+    private static final int MAX_CLIENTS = 256;
 
     private final CopyOnWriteArrayList<Client> clients = new CopyOnWriteArrayList<>();
     private final ObjectMapper mapper = new ObjectMapper();
@@ -60,7 +63,11 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
      * @param os the client's response output stream
      */
     public void addClient(OutputStream os) {
-        if (shuttingDown) {
+        if (shuttingDown || clients.size() >= MAX_CLIENTS) {
+            if (!shuttingDown) {
+                LOG.warning("Rejecting SSE client: reached the maximum of " + MAX_CLIENTS
+                        + " concurrent clients");
+            }
             try {
                 os.close();
             } catch (IOException ignore) {

@@ -143,7 +143,6 @@ public class ProxyHandler implements HttpHandler {
                 }
             });
 
-            long maxResponseBytes = config.getMaxRequestBodyBytes();
             boolean bodyAllowed = statusCode != 204 && statusCode != 304
                     && !"HEAD".equalsIgnoreCase(method);
             responseStarted = true;
@@ -153,18 +152,13 @@ public class ProxyHandler implements HttpHandler {
             try (InputStream upstreamBody = upstreamResponse.body()) {
                 if (bodyAllowed) {
                     try (OutputStream os = exchange.getResponseBody()) {
+                        // Stream in fixed-size chunks: the proxy's memory stays bounded by the
+                        // buffer regardless of body size, so a large or unbounded upstream
+                        // response (e.g. the OversizedResponse fault) is forwarded faithfully
+                        // rather than silently truncated.
                         byte[] chunk = new byte[8192];
-                        long total = 0;
                         int read;
                         while ((read = upstreamBody.read(chunk)) != -1) {
-                            total += read;
-                            if (total > maxResponseBytes) {
-                                // Never forward an unbounded response; truncate and stop so the
-                                // proxy's memory stays bounded even for a hostile upstream.
-                                LOG.warning("Upstream response for " + method + " " + path
-                                        + " exceeded " + maxResponseBytes + " bytes; truncating");
-                                break;
-                            }
                             os.write(chunk, 0, read);
                         }
                     }

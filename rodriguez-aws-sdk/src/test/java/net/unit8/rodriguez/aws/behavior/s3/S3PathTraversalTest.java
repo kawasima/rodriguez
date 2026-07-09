@@ -68,6 +68,30 @@ class S3PathTraversalTest {
     }
 
     @Test
+    void rejectsDotBucketNameThatResolvesToRoot() {
+        // A "." bucket normalizes back to the storage root; DeleteBucket would then
+        // recursively delete every bucket. It must be rejected as a non-descendant.
+        assertThatThrownBy(() -> action.bucket("."))
+                .isInstanceOf(S3AccessDeniedException.class);
+    }
+
+    @Test
+    void rejectsObjectNameEscapingIntoSiblingBucket() {
+        // The object key is contained within its bucket, not merely the storage root,
+        // so "../other-bucket/key" cannot cross bucket isolation.
+        assertThatThrownBy(() -> action.object("bucket-a", "../bucket-b/key"))
+                .isInstanceOf(S3AccessDeniedException.class);
+    }
+
+    @Test
+    void objectStaysWithinItsBucketDirectory() {
+        Path expectedRoot = root.toPath().toAbsolutePath().normalize();
+        Path bucket = action.bucket("my-bucket");
+        assertThat(action.object("my-bucket", "nested/key").startsWith(bucket)).isTrue();
+        assertThat(action.object("my-bucket", "nested/key").startsWith(expectedRoot)).isTrue();
+    }
+
+    @Test
     void rejectsTraversalObjectName() {
         assertThatThrownBy(() -> action.object("my-bucket", "../../etc/passwd"))
                 .isInstanceOf(S3AccessDeniedException.class);

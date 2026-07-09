@@ -7,6 +7,7 @@ import jnr.ffi.types.size_t;
 import jnr.posix.FileStat;
 import net.unit8.rodriguez.fuse.fault.CorruptedRead;
 import net.unit8.rodriguez.fuse.fault.FuseFault;
+import net.unit8.rodriguez.util.PathContainment;
 import ru.serce.jnrfuse.ErrorCodes;
 import ru.serce.jnrfuse.FuseFillDir;
 import ru.serce.jnrfuse.FuseStubFS;
@@ -38,6 +39,7 @@ public class FaultInjectionFS extends FuseStubFS {
     private static final Logger LOG = Logger.getLogger(FaultInjectionFS.class.getName());
 
     private final Path backingPath;
+    private final Path backingRealPath;
     private final List<FaultRule> faultRules;
 
     /**
@@ -48,7 +50,22 @@ public class FaultInjectionFS extends FuseStubFS {
      */
     public FaultInjectionFS(Path backingPath, List<FaultRule> faultRules) {
         this.backingPath = backingPath.normalize();
+        this.backingRealPath = canonicalizeBacking(this.backingPath);
         this.faultRules = faultRules;
+    }
+
+    /**
+     * Resolves the backing directory to its canonical form once, so the per-operation
+     * containment check does not repeat a {@code toRealPath()} syscall on the hot path
+     * (getattr/read/write run on essentially every kernel path lookup). Falls back to
+     * the normalized path if the backing directory cannot yet be canonicalized.
+     */
+    private static Path canonicalizeBacking(Path backingPath) {
+        try {
+            return backingPath.toRealPath();
+        } catch (IOException e) {
+            return backingPath;
+        }
     }
 
     /**
@@ -74,45 +91,10 @@ public class FaultInjectionFS extends FuseStubFS {
         if (relativePath.isEmpty()) {
             return backingPath;
         }
-        Path resolved = backingPath.resolve(relativePath).normalize();
-        if (!resolved.startsWith(backingPath)) {
-            return null;
-        }
-        if (!isWithinBackingRealPath(resolved)) {
-            return null;
-        }
-        return resolved;
-    }
-
-    /**
-     * Verifies that a lexically-contained path does not escape the backing directory
-     * through a symlink. The nearest existing ancestor of {@code resolved} is resolved to
-     * its canonical form and checked against the backing directory's real path.
-     *
-     * <p>If {@code resolved} itself exists (including as a symlink), its own real path is
-     * checked, so a symlink pointing outside the backing root is rejected. For a
-     * not-yet-existing target, only its existing ancestors can be verified here; the
-     * canonical status of the freshly-created leaf itself is not yet knowable, which is an
-     * acceptable residual caveat since the ancestor check still blocks escapes via an
-     * existing intermediate symlink. Fails closed if the real path cannot be resolved.
-     *
-     * @param resolved a lexically-contained backing path
-     * @return {@code true} if the path is contained under the backing directory's real path
-     */
-    private boolean isWithinBackingRealPath(Path resolved) {
-        try {
-            Path backingReal = backingPath.toRealPath();
-            Path existing = resolved;
-            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-                existing = existing.getParent();
-            }
-            if (existing == null) {
-                return false;
-            }
-            return existing.toRealPath().startsWith(backingReal);
-        } catch (IOException e) {
-            return false;
-        }
+        // allowBaseItself: a relative path may legitimately normalize to the mount root
+        // (e.g. "."). The symlink real-path check uses the cached canonical backing path.
+        return PathContainment.resolveWithin(backingPath, backingRealPath, relativePath, true)
+                .orElse(null);
     }
 
     private FuseFault findFault(String path, FuseOperation operation) {

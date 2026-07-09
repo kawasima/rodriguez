@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -309,8 +310,13 @@ public class ApiHandler implements HttpHandler {
     /**
      * Refreshes the cached view of the control API's advertised behavior ports
      * (both the faultType-to-port map and the set of known ports) when stale.
+     *
+     * <p>The blocking control-API round trip runs <em>without</em> holding a lock and
+     * is bounded by a timeout, so a slow or hung control API cannot serialize concurrent
+     * rule-creation requests behind a monitor. On expiry a few requests may refresh
+     * concurrently; that brief, bounded duplication is acceptable for a 60s TTL.
      */
-    private synchronized void refreshBehaviorCacheIfStale() {
+    private void refreshBehaviorCacheIfStale() {
         if (!behaviorPortCache.isEmpty()
                 && (System.currentTimeMillis() - behaviorCacheAt) < BEHAVIOR_CACHE_TTL_MS) {
             return;
@@ -318,6 +324,7 @@ public class ApiHandler implements HttpHandler {
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(config.getControlUrl() + "/config"))
+                    .timeout(Duration.ofMillis(config.getRequestTimeoutMs()))
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

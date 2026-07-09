@@ -1,12 +1,10 @@
 package net.unit8.rodriguez.gcp.behavior.gcs;
 
 import net.unit8.rodriguez.gcp.GCSException;
-import net.unit8.rodriguez.gcp.GCSRequest;
+import net.unit8.rodriguez.util.PathContainment;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -66,11 +64,9 @@ public abstract class GCSActionBase<T> implements GCSMockAction<T> {
      * @throws GCSException if the name is missing or escapes the storage root
      */
     protected Path resolveBucketPath(String bucketName) {
-        if (gcsDirectory == null) {
-            throw new GCSException(500, "GCS storage directory is not initialized");
-        }
-        Path root = gcsDirectory.toPath().toAbsolutePath().normalize();
-        return resolveWithin(root, bucketName);
+        Path root = storageRoot();
+        return PathContainment.resolveWithin(root, storageRootReal(root), bucketName, false)
+                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + bucketName));
     }
 
     /**
@@ -87,45 +83,26 @@ public abstract class GCSActionBase<T> implements GCSMockAction<T> {
      * @throws GCSException if either name is missing or escapes its container
      */
     protected Path resolveObjectPath(String bucketName, String objectName) {
-        Path bucketPath = resolveBucketPath(bucketName);
-        return resolveWithin(bucketPath, objectName);
+        Path root = storageRoot();
+        Path rootReal = storageRootReal(root);
+        Path bucketPath = PathContainment.resolveWithin(root, rootReal, bucketName, false)
+                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + bucketName));
+        return PathContainment.resolveWithin(bucketPath, rootReal, objectName, false)
+                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + objectName));
     }
 
-    private static Path resolveWithin(Path base, String child) {
-        if (child == null || child.isEmpty()) {
-            throw new GCSException(400, "Missing or empty name");
+    private Path storageRoot() {
+        if (gcsDirectory == null) {
+            throw new GCSException(500, "GCS storage directory is not initialized");
         }
-        Path resolved = base.resolve(child).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new GCSException(400, "Invalid name (path traversal rejected): " + child);
-        }
-        // The lexical check above cannot see symlinks: a link inside the storage
-        // root can still point outside it. As a best-effort defense, resolve the
-        // nearest existing ancestor of the target to its real path and confirm it
-        // stays under the base's real path. Not-yet-existing object paths are
-        // permitted (only the existing prefix is checked), so writes to new nested
-        // objects continue to resolve normally.
-        verifyRealPathWithin(base, resolved, child);
-        return resolved;
+        return gcsDirectory.toPath().toAbsolutePath().normalize();
     }
 
-    private static void verifyRealPathWithin(Path base, Path resolved, String child) {
+    private Path storageRootReal(Path root) {
         try {
-            Path existing = resolved;
-            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
-                existing = existing.getParent();
-            }
-            if (existing == null) {
-                return;
-            }
-            Path baseReal = base.toRealPath();
-            Path existingReal = existing.toRealPath();
-            if (!existingReal.startsWith(baseReal)) {
-                throw new GCSException(400, "Invalid name (path traversal rejected): " + child);
-            }
+            return root.toRealPath();
         } catch (IOException e) {
-            // Real paths could not be resolved (e.g. the base does not exist yet);
-            // fall back to the lexical containment check already performed above.
+            throw new GCSException(500, "Failed to resolve GCS storage root: " + e.getMessage());
         }
     }
 }

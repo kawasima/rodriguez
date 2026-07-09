@@ -106,6 +106,23 @@ public class S3Test {
         assertThat(response.body()).doesNotContain("passwd");
     }
 
+    @Test
+    void deleteBucketDotIsRejectedAndDoesNotWipeRoot() throws Exception {
+        s3client.createBucket("sentinel-bucket");
+        // "%2e" decodes to a "." bucket name that normalizes back to the storage root.
+        // DeleteBucket on it would recursively delete every bucket; it must be rejected.
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:10202/%2e"))
+                .DELETE()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(403);
+        // The storage root and its buckets survive.
+        assertThat(s3client.listBuckets())
+                .anySatisfy(b -> assertThat(b.getName()).isEqualTo("sentinel-bucket"));
+    }
+
     @AfterEach
     void tearDown() throws IOException {
         server.shutdown();
