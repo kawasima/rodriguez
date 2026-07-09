@@ -4,6 +4,16 @@ A test harness tool that adheres to the "Release It!" failure patterns.
 It simulates various infrastructure failures (network, HTTP, JDBC, filesystem, AWS/GCP services)
 on different ports from a single process.
 
+## Security model
+
+Rodriguez is a fault-injection **test** tool and is designed to run only inside a
+trusted, isolated network (local development, CI, or a private test network).
+Its control REST API (port 10200, including `/shutdown` and `/config`) and the
+reverse-proxy management API are intentionally **unauthenticated** to keep test
+setups friction-free. Do not expose these ports to untrusted networks or the
+public internet, and treat any host running Rodriguez as capable of being
+reconfigured or shut down by anyone who can reach it.
+
 ## Failure Patterns
 
 - [X] It can be refused.

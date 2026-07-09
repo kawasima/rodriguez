@@ -28,6 +28,11 @@ public class RodriguezDriver implements Driver {
 
     @Override
     public Connection connect(String url, Properties properties) throws SQLException {
+        // Per the Driver.connect contract, return null (rather than a connection) for
+        // URLs this driver does not handle, so DriverManager can try other drivers.
+        if (url == null || !acceptsURL(url)) {
+            return null;
+        }
         return new ConnectionImpl(url, properties);
     }
 

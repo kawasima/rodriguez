@@ -8,8 +8,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -28,7 +26,6 @@ public class HarnessServer {
 
     private List<Runnable> servers;
     private ControlServer controlServer;
-    private ExecutorService executor;
     private final List<HarnessExtension> activeExtensions = new ArrayList<>();
 
     /**
@@ -78,30 +75,22 @@ public class HarnessServer {
             available.setMetricRegistry(metricRegistry);
         }
         if (behavior.canListen()) {
-            return behavior.createServer(executor, port);
+            return behavior.createServer(port);
         }
         return () -> {};
     }
 
     /**
-     * Starts the harness server using a cached thread pool executor.
-     */
-    public void start() {
-        start(Executors.newCachedThreadPool());
-    }
-
-    /**
-     * Starts the harness server using the given executor service.
+     * Starts the harness server.
      *
      * <p>Creates behavior servers on all configured ports, starts the control server
-     * if configured, and initializes any registered extensions.
-     *
-     * @param executor the executor service to use for handling connections
+     * if configured, and initializes any registered extensions. Each behavior owns and
+     * manages its own thread resources, so thread exhaustion on one port cannot affect
+     * the others.
      */
-    public void start(ExecutorService executor) {
+    public void start() {
         config.getControlPort().ifPresent(p -> controlServer = new ControlServer(p, this));
 
-        this.executor = executor;
         servers = config.getPorts()
                 .entrySet()
                 .stream()
@@ -167,9 +156,6 @@ public class HarnessServer {
     public void shutdown() {
         LOG.info("shutdown");
         synchronized (lock) {
-            if (executor != null) {
-                executor.shutdown();
-            }
             if (servers != null) {
                 servers.forEach(Runnable::run);
             }

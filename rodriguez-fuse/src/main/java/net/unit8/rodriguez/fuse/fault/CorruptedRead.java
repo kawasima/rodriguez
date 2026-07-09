@@ -61,6 +61,10 @@ public class CorruptedRead implements FuseFault {
      * @param length the number of valid bytes in the buffer
      */
     public void corruptBuffer(byte[] buf, int length) {
+        if (length <= 0) {
+            // Nothing to corrupt; random.nextInt(0) would throw.
+            return;
+        }
         int bytesToCorrupt = Math.max(1, (int) (length * corruptionRate));
         for (int i = 0; i < bytesToCorrupt; i++) {
             int pos = random.nextInt(length);

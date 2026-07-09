@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -22,12 +24,26 @@ import java.util.logging.Logger;
  *
  * <p>Implements {@link FaultRuleStore.FaultRuleListener} to receive events
  * from the store and forward them as SSE messages.
+ *
+ * <p>Each client owns a bounded queue and a dedicated writer thread. Broadcasting only
+ * offers bytes to those queues (never blocks on a socket write), so a single slow or
+ * stalled SSE reader can neither block the broadcasting thread nor other clients, and can
+ * never grow memory without bound: when its queue overflows the client is dropped. A
+ * client's own writer drains its queue in FIFO order, keeping that client's SSE framing
+ * intact.
  */
 public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, ObservedPathStore.Observer {
     private static final Logger LOG = Logger.getLogger(EventBroadcaster.class.getName());
     private static final int HEARTBEAT_INTERVAL_SECONDS = 30;
-    private final CopyOnWriteArrayList<OutputStream> clients = new CopyOnWriteArrayList<>();
+    /** Per-client queue capacity. When full, the client is treated as a stalled reader and dropped. */
+    private static final int CLIENT_QUEUE_CAPACITY = 1024;
+    /** Upper bound on concurrent SSE clients, so a client opening connections in a loop
+     * cannot spawn unbounded writer threads and queues. */
+    private static final int MAX_CLIENTS = 256;
+
+    private final CopyOnWriteArrayList<Client> clients = new CopyOnWriteArrayList<>();
     private final ObjectMapper mapper = new ObjectMapper();
+    private volatile boolean shuttingDown = false;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "sse-heartbeat");
         t.setDaemon(true);
@@ -47,19 +63,25 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
      * @param os the client's response output stream
      */
     public void addClient(OutputStream os) {
-        clients.add(os);
+        if (shuttingDown || clients.size() >= MAX_CLIENTS) {
+            if (!shuttingDown) {
+                LOG.warning("Rejecting SSE client: reached the maximum of " + MAX_CLIENTS
+                        + " concurrent clients");
+            }
+            try {
+                os.close();
+            } catch (IOException ignore) {
+                // Already gone.
+            }
+            return;
+        }
+        Client client = new Client(os);
+        clients.add(client);
+        client.start();
     }
 
     private void sendHeartbeat() {
-        byte[] bytes = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8);
-        for (OutputStream os : clients) {
-            try {
-                os.write(bytes);
-                os.flush();
-            } catch (IOException e) {
-                clients.remove(os);
-            }
-        }
+        dispatch(": keep-alive\n\n".getBytes(StandardCharsets.UTF_8));
     }
 
     private void broadcast(FaultEvent event) {
@@ -70,30 +92,30 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
             LOG.log(Level.WARNING, "Failed to serialize event", e);
             return;
         }
-        String sseMessage = "event: " + event.type() + "\ndata: " + json + "\n\n";
-        byte[] bytes = sseMessage.getBytes(StandardCharsets.UTF_8);
-
-        for (OutputStream os : clients) {
-            try {
-                os.write(bytes);
-                os.flush();
-            } catch (IOException e) {
-                clients.remove(os);
-            }
-        }
+        broadcastRaw(event.type(), json);
     }
 
     private void broadcastRaw(String eventType, String json) {
         String sseMessage = "event: " + eventType + "\ndata: " + json + "\n\n";
-        byte[] bytes = sseMessage.getBytes(StandardCharsets.UTF_8);
-        for (OutputStream os : clients) {
-            try {
-                os.write(bytes);
-                os.flush();
-            } catch (IOException e) {
-                clients.remove(os);
+        dispatch(sseMessage.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Offers the given bytes to every connected client's queue. This never blocks: a client
+     * whose queue is full (a stalled reader) is dropped instead of stalling the broadcast.
+     */
+    private void dispatch(byte[] bytes) {
+        for (Client client : clients) {
+            if (!client.enqueue(bytes)) {
+                LOG.info("Dropping slow SSE client (queue overflow)");
+                dropClient(client);
             }
         }
+    }
+
+    private void dropClient(Client client) {
+        clients.remove(client);
+        client.close();
     }
 
     @Override
@@ -128,14 +150,73 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
      * Closes all connected SSE clients and stops the heartbeat scheduler.
      */
     public void shutdown() {
+        shuttingDown = true;
         scheduler.shutdownNow();
-        for (OutputStream os : clients) {
+        for (Client client : clients) {
+            client.close();
+        }
+        clients.clear();
+    }
+
+    /**
+     * A single connected SSE client. Owns a bounded FIFO queue and a dedicated daemon writer
+     * thread that drains the queue to the client's socket. Writes for one client never touch
+     * another client's socket, so one stalled reader cannot affect the others.
+     */
+    private final class Client {
+        private final OutputStream os;
+        private final BlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(CLIENT_QUEUE_CAPACITY);
+        private final Thread writer;
+        private volatile boolean closed = false;
+
+        Client(OutputStream os) {
+            this.os = os;
+            this.writer = new Thread(this::run, "sse-writer");
+            this.writer.setDaemon(true);
+        }
+
+        void start() {
+            writer.start();
+        }
+
+        /**
+         * Offers bytes to this client's queue without blocking.
+         *
+         * @return {@code false} if the client is closed or its queue is full (stalled reader)
+         */
+        boolean enqueue(byte[] bytes) {
+            if (closed) {
+                return false;
+            }
+            return queue.offer(bytes);
+        }
+
+        private void run() {
+            try {
+                while (!closed) {
+                    byte[] bytes = queue.take();
+                    os.write(bytes);
+                    os.flush();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException e) {
+                // Reader disconnected; fall through to cleanup.
+            } finally {
+                // Ensure a client that failed on its own (e.g. reader closed) is unregistered.
+                clients.remove(this);
+                close();
+            }
+        }
+
+        void close() {
+            closed = true;
+            writer.interrupt();
             try {
                 os.close();
             } catch (IOException ignore) {
-                // Client already disconnected
+                // Client already disconnected.
             }
         }
-        clients.clear();
     }
 }

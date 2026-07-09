@@ -29,9 +29,16 @@ public class ListObjectsAction extends S3ActionBase<ListObjectsAction.ListBucket
     @Override
     public ListBucketResult handle(AWSRequest request) {
         ListBucketResult result = new ListBucketResult();
-        result.Name = request.getParams().getFirst("BucketName");
-        result.Contents = Optional.ofNullable(getS3Directory())
-                .map(dir -> new File(dir, result.Name))
+        String bucketName = request.getParams().getFirst("BucketName");
+        result.Name = bucketName;
+        // Absent bucket name is a legitimate empty listing; a present name must be
+        // routed through the containment helper so that "../" / absolute escapes are
+        // rejected with S3AccessDeniedException instead of listing an arbitrary directory.
+        if (bucketName == null || bucketName.isEmpty()) {
+            result.Contents = Collections.emptyList();
+            return result;
+        }
+        result.Contents = Optional.of(resolveBucketPath(bucketName).toFile())
                 .filter(File::isDirectory)
                 .map(File::listFiles)
                 .map(files -> Arrays.stream(files)

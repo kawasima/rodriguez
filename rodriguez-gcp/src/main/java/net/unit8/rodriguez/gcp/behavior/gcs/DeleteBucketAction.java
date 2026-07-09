@@ -24,8 +24,7 @@ public class DeleteBucketAction extends GCSActionBase<Void> {
     @Override
     public Void handle(GCSRequest request) {
         String bucketName = request.getQueryParam("_bucketName");
-        Optional.ofNullable(getGcsDirectory())
-                .map(dir -> new File(dir, bucketName).toPath())
+        Optional.of(resolveBucketPath(bucketName))
                 .filter(Files::exists)
                 .ifPresent(path -> {
                     try (Stream<Path> walk = Files.walk(path)) {

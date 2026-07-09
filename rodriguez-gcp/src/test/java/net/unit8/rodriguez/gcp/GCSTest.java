@@ -163,6 +163,29 @@ class GCSTest {
     }
 
     @Test
+    void getObjectMetadataForMissingObjectReturns404() throws Exception {
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "meta-404-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // Metadata for a key that was never uploaded must be 404, not fabricated
+        // metadata (size 0, epoch timestamps) with a 200.
+        HttpResponse<String> metaResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b/meta-404-bucket/o/missing.txt"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(metaResponse.statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void listObjects() throws Exception {
         // Create bucket and upload objects
         String bucketBody = mapper.writeValueAsString(Map.of("name", "list-obj-bucket"));
@@ -259,6 +282,102 @@ class GCSTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(deleteResponse.statusCode()).isEqualTo(204);
+    }
+
+    @Test
+    void downloadWithTraversingObjectNameIsRejected() throws Exception {
+        // Percent-encoded "../../../../etc/passwd" is decoded by the HTTP server
+        // into the object name; the mock must reject it instead of reading
+        // outside the storage root.
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL
+                                + "/storage/v1/b/any-bucket/o/..%2F..%2F..%2F..%2Fetc%2Fpasswd?alt=media"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).doesNotContain("root:");
+    }
+
+    @Test
+    void uploadWithTraversingObjectNameIsRejected() throws Exception {
+        // Create a real bucket so the request reaches the upload action.
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "traversal-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL
+                                + "/upload/storage/v1/b/traversal-bucket/o?uploadType=media&name=..%2F..%2F..%2Fescape.txt"))
+                        .header("Content-Type", "text/plain")
+                        .POST(HttpRequest.BodyPublishers.ofString("owned"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void deleteBucketDotIsRejectedAndDoesNotWipeRoot() throws Exception {
+        // Create a sentinel bucket that must survive the attack.
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "sentinel-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // "%2e" decodes to a "." bucket name that normalizes back to the storage root.
+        // DeleteBucket on it would recursively delete every bucket; it must be rejected.
+        HttpResponse<String> deleteResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b/%2e"))
+                        .DELETE()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(deleteResponse.statusCode()).isEqualTo(400);
+
+        // The sentinel bucket (and thus the storage root) still exists.
+        HttpResponse<String> listResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(listResponse.body()).contains("sentinel-bucket");
+    }
+
+    @Test
+    void getMissingObjectReturns404() throws Exception {
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "missing-obj-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // Downloading an object that does not exist must be a clean 404, not an
+        // empty 200 committed before the file stream fails.
+        HttpResponse<byte[]> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b/missing-obj-bucket/o/nope.txt?alt=media"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(404);
     }
 
     @Test

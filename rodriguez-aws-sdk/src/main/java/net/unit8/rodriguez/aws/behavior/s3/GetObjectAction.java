@@ -19,6 +19,6 @@ public class GetObjectAction extends S3ActionBase<File> {
     public File handle(AWSRequest request) {
         String bucketName = request.getParams().getFirst("BucketName");
         String objectName = request.getParams().getFirst("ObjectName");
-        return getS3Directory().toPath().resolve(bucketName).resolve(objectName).toFile();
+        return resolveObjectPath(bucketName, objectName).toFile();
     }
 }
