@@ -163,6 +163,29 @@ class GCSTest {
     }
 
     @Test
+    void getObjectMetadataForMissingObjectReturns404() throws Exception {
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "meta-404-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // Metadata for a key that was never uploaded must be 404, not fabricated
+        // metadata (size 0, epoch timestamps) with a 200.
+        HttpResponse<String> metaResponse = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b/meta-404-bucket/o/missing.txt"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(metaResponse.statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void listObjects() throws Exception {
         // Create bucket and upload objects
         String bucketBody = mapper.writeValueAsString(Map.of("name", "list-obj-bucket"));

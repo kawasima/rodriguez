@@ -112,6 +112,9 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
              DataOutputStream os = new DataOutputStream(socket.getOutputStream())) {
             int queryTimeout = 0;
             DelayTimer timer = null;
+            // Tracks whether the most recent EXECUTE_QUERY timed out, so a following
+            // RS_NEXT reports TIMEOUT rather than a clean empty result set.
+            boolean queryTimedOut = false;
             while(!Thread.interrupted()) {
                 if (socket.isClosed()) {
                     throw new EOFException("socket closed");
@@ -136,17 +139,23 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
                         getMetricRegistry().counter(MetricRegistry.name(getClass(), "execute-query")).inc();
                         timer = new DelayTimer(queryTimeout);
                         if (timer.isTimeout(delayExecution)) {
+                            queryTimedOut = true;
                             os.writeInt(JDBCCommandStatus.TIMEOUT.ordinal());
                         } else {
+                            queryTimedOut = false;
                             os.writeInt(JDBCCommandStatus.SUCCESS.ordinal());
                             session = doExecute(is, os);
                         }
                         break;
                     }
                     case RS_NEXT: {
-                        if (timer == null || session == null) {
-                            // RS_NEXT arrived before any EXECUTE_QUERY. Respond cleanly
-                            // (no rows) instead of dereferencing a null session/timer.
+                        if (queryTimedOut) {
+                            // The preceding EXECUTE_QUERY timed out, leaving no result set;
+                            // report the timeout rather than a clean empty result set.
+                            os.writeInt(JDBCCommandStatus.TIMEOUT.ordinal());
+                        } else if (timer == null || session == null) {
+                            // RS_NEXT arrived before any EXECUTE_QUERY (or after an update).
+                            // Respond cleanly (no rows) instead of dereferencing a null session.
                             getMetricRegistry().counter(MetricRegistry.name(getClass(), "protocol-error")).inc();
                             os.writeInt(JDBCCommandStatus.SUCCESS.ordinal());
                             os.writeBoolean(false);
@@ -161,6 +170,7 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
                     case EXECUTE_UPDATE: {
                         closeReader(session);
                         session = null;
+                        queryTimedOut = false;
                         getMetricRegistry().counter(MetricRegistry.name(getClass(), "execute-update")).inc();
                         timer = new DelayTimer(queryTimeout);
                         String sql = is.readUTF();

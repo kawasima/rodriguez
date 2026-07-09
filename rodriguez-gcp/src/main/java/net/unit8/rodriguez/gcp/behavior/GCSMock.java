@@ -9,6 +9,7 @@ import net.unit8.rodriguez.gcp.GCSException;
 import net.unit8.rodriguez.gcp.GCSRequest;
 import net.unit8.rodriguez.gcp.behavior.gcs.GCSAction;
 import net.unit8.rodriguez.metrics.MetricRegistry;
+import net.unit8.rodriguez.util.BoundedBody;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -44,7 +45,7 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
     private static final Pattern BUCKETS_PATH = Pattern.compile("^/storage/v1/b/?$");
 
     /** Maximum accepted size for a metadata (non-upload) request body (64 MB). */
-    static final long MAX_METADATA_BODY_SIZE = 64L * 1024 * 1024;
+    static final long MAX_METADATA_BODY_SIZE = BoundedBody.DEFAULT_MAX_BODY_SIZE;
 
     private final ObjectMapper mapper;
     private final long maxMetadataBodySize;
@@ -194,15 +195,11 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
      * @throws GCSException if the body exceeds {@code limit}
      */
     private static byte[] readBounded(InputStream in, long limit) throws IOException {
-        // Bound the in-memory buffer to a Java array's capacity and detect
-        // overflow of `limit + 1` explicitly.
-        long effectiveLimit = Math.min(limit, (long) Integer.MAX_VALUE - 8);
-        int cap = (int) (effectiveLimit + 1);
-        byte[] data = in.readNBytes(cap);
-        if (data.length > effectiveLimit) {
-            throw new GCSException(413, "Request body exceeds maximum allowed size of " + effectiveLimit + " bytes");
+        try {
+            return BoundedBody.read(in, limit);
+        } catch (net.unit8.rodriguez.util.BodyTooLargeException e) {
+            throw new GCSException(413, e.getMessage());
         }
-        return data;
     }
 
     private void parsePath(GCSRequest request, String path) {

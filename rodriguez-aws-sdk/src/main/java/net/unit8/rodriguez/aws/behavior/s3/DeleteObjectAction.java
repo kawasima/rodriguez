@@ -25,7 +25,8 @@ public class DeleteObjectAction extends S3ActionBase<Void> {
 
         Path objectFile = resolveObjectPath(bucketName, objectName);
         try {
-            Files.delete(objectFile);
+            // S3 DeleteObject is idempotent: deleting a missing key succeeds.
+            Files.deleteIfExists(objectFile);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

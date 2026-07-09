@@ -6,8 +6,9 @@ import net.unit8.rodriguez.proxy.ProxyConfig;
 import net.unit8.rodriguez.proxy.model.FaultRule;
 import net.unit8.rodriguez.proxy.store.FaultRuleStore;
 import net.unit8.rodriguez.proxy.store.ObservedPathStore;
+import net.unit8.rodriguez.util.BodyTooLargeException;
+import net.unit8.rodriguez.util.BoundedBody;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -103,9 +104,11 @@ public class ProxyHandler implements HttpHandler {
 
             // Enforce the limit while reading regardless of Content-Length, so a chunked
             // request with no Content-Length cannot buffer an unbounded body (OOM).
-            byte[] requestBody = readBounded(
-                    exchange.getRequestBody(), config.getMaxRequestBodyBytes());
-            if (requestBody == null) {
+            byte[] requestBody;
+            try {
+                requestBody = BoundedBody.read(
+                        exchange.getRequestBody(), config.getMaxRequestBodyBytes());
+            } catch (BodyTooLargeException e) {
                 exchange.sendResponseHeaders(413, -1);
                 exchange.close();
                 return;
@@ -137,26 +140,33 @@ public class ProxyHandler implements HttpHandler {
                 observedPathStore.record(path);
             }
 
-            upstreamResponse.headers().map().forEach((name, values) -> {
-                if (!isHopByHop(name)) {
-                    values.forEach(v -> exchange.getResponseHeaders().add(name, v));
-                }
-            });
-
             boolean bodyAllowed = statusCode != 204 && statusCode != 304
                     && !"HEAD".equalsIgnoreCase(method);
-            responseStarted = true;
-            // Length 0 selects chunked transfer encoding, letting us stream an
-            // unknown-length body without buffering it; -1 means "no body".
-            exchange.sendResponseHeaders(statusCode, bodyAllowed ? 0 : -1);
             try (InputStream upstreamBody = upstreamResponse.body()) {
-                if (bodyAllowed) {
+                // Read the first chunk BEFORE committing the response status. If the upstream
+                // fails immediately (e.g. the fault port closes the connection), the exception
+                // is caught below while responseStarted is still false, so the client gets a
+                // clean 502. Once the status is committed we can only stream; a failure after
+                // this point yields a truncated body (unavoidable with unbuffered streaming).
+                byte[] chunk = new byte[8192];
+                int firstRead = bodyAllowed ? upstreamBody.read(chunk) : -1;
+
+                upstreamResponse.headers().map().forEach((name, values) -> {
+                    if (!isHopByHop(name)) {
+                        values.forEach(v -> exchange.getResponseHeaders().add(name, v));
+                    }
+                });
+
+                responseStarted = true;
+                // Length 0 selects chunked transfer encoding, letting us stream an
+                // unknown-length body without buffering it; -1 means "no body".
+                exchange.sendResponseHeaders(statusCode, bodyAllowed && firstRead != -1 ? 0 : -1);
+                if (bodyAllowed && firstRead != -1) {
                     try (OutputStream os = exchange.getResponseBody()) {
                         // Stream in fixed-size chunks: the proxy's memory stays bounded by the
                         // buffer regardless of body size, so a large or unbounded upstream
-                        // response (e.g. the OversizedResponse fault) is forwarded faithfully
-                        // rather than silently truncated.
-                        byte[] chunk = new byte[8192];
+                        // response (e.g. the OversizedResponse fault) is forwarded faithfully.
+                        os.write(chunk, 0, firstRead);
                         int read;
                         while ((read = upstreamBody.read(chunk)) != -1) {
                             os.write(chunk, 0, read);
@@ -181,27 +191,5 @@ public class ProxyHandler implements HttpHandler {
 
     private static boolean isHopByHop(String header) {
         return HOP_BY_HOP_HEADERS.contains(header.toLowerCase());
-    }
-
-    /**
-     * Reads the input stream into a byte array, aborting once {@code maxBytes} is exceeded.
-     *
-     * @param in       the request body input stream
-     * @param maxBytes the maximum number of bytes to buffer
-     * @return the buffered body, or {@code null} if the body exceeds {@code maxBytes}
-     */
-    static byte[] readBounded(InputStream in, long maxBytes) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        byte[] chunk = new byte[8192];
-        long total = 0;
-        int read;
-        while ((read = in.read(chunk)) != -1) {
-            total += read;
-            if (total > maxBytes) {
-                return null;
-            }
-            buffer.write(chunk, 0, read);
-        }
-        return buffer.toByteArray();
     }
 }

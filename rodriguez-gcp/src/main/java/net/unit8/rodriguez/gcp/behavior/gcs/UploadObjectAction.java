@@ -2,6 +2,7 @@ package net.unit8.rodriguez.gcp.behavior.gcs;
 
 import net.unit8.rodriguez.gcp.GCSException;
 import net.unit8.rodriguez.gcp.GCSRequest;
+import net.unit8.rodriguez.util.BoundedBody;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,7 +31,7 @@ import java.util.zip.CRC32C;
  */
 public class UploadObjectAction extends GCSActionBase<Map<String, Object>> {
     /** Default maximum upload body size in bytes (64 MB). */
-    static final long DEFAULT_MAX_BODY_SIZE = 64L * 1024 * 1024;
+    static final long DEFAULT_MAX_BODY_SIZE = BoundedBody.DEFAULT_MAX_BODY_SIZE;
 
     private static final byte[] CRLF_CRLF = {'\r', '\n', '\r', '\n'};
     private static final byte[] LF_LF = {'\n', '\n'};
@@ -164,18 +165,9 @@ public class UploadObjectAction extends GCSActionBase<Map<String, Object>> {
      */
     private static byte[] readBounded(InputStream in, long limit) {
         try {
-            // Multipart bodies are buffered fully in memory, so the effective cap
-            // can never exceed a Java array's capacity. Clamp `limit` to that bound
-            // before computing `limit + 1` so the read cap cannot overflow to a
-            // negative int (which would throw) nor silently saturate at
-            // Integer.MAX_VALUE while the size check below never fires.
-            long effectiveLimit = Math.min(limit, (long) Integer.MAX_VALUE - 8);
-            int cap = (int) (effectiveLimit + 1);
-            byte[] data = in.readNBytes(cap);
-            if (data.length > effectiveLimit) {
-                throw new GCSException(413, "Upload exceeds maximum allowed size of " + effectiveLimit + " bytes");
-            }
-            return data;
+            return BoundedBody.read(in, limit);
+        } catch (net.unit8.rodriguez.util.BodyTooLargeException e) {
+            throw new GCSException(413, e.getMessage());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

@@ -9,6 +9,8 @@ import net.unit8.rodriguez.proxy.model.BehaviorInfo;
 import net.unit8.rodriguez.proxy.model.FaultRule;
 import net.unit8.rodriguez.proxy.store.FaultRuleStore;
 import net.unit8.rodriguez.proxy.store.ObservedPathStore;
+import net.unit8.rodriguez.util.BodyTooLargeException;
+import net.unit8.rodriguez.util.BoundedBody;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -51,7 +53,15 @@ public class ApiHandler implements HttpHandler {
     private final Map<String, Integer> behaviorPortCache = new ConcurrentHashMap<>();
     private volatile Set<Integer> knownFaultPorts = Set.of();
     private volatile long behaviorCacheAt = 0L;
+    private volatile long lastRefreshAttemptAt = 0L;
     private static final long BEHAVIOR_CACHE_TTL_MS = 60_000L;
+    /**
+     * Negative-cache interval: when the cache is still empty (e.g. the control API is
+     * down or starting), don't retry the blocking round trip on every request. Bounds
+     * the retry rate to once per interval while still recovering quickly once the
+     * control API comes up.
+     */
+    private static final long BEHAVIOR_NEGATIVE_TTL_MS = 5_000L;
     /** Upper bound on the per-rule request count, to reject absurd/negative values. */
     private static final int MAX_RULE_COUNT = 1_000_000;
 
@@ -142,9 +152,10 @@ public class ApiHandler implements HttpHandler {
 
     private void handleCreateRule(HttpExchange exchange) throws IOException {
         // Bound the request body so a large POST cannot OOM the control port.
-        byte[] body = ProxyHandler.readBounded(
-                exchange.getRequestBody(), config.getMaxRequestBodyBytes());
-        if (body == null) {
+        byte[] body;
+        try {
+            body = BoundedBody.read(exchange.getRequestBody(), config.getMaxRequestBodyBytes());
+        } catch (BodyTooLargeException e) {
             exchange.sendResponseHeaders(413, -1);
             return;
         }
@@ -317,10 +328,17 @@ public class ApiHandler implements HttpHandler {
      * concurrently; that brief, bounded duplication is acceptable for a 60s TTL.
      */
     private void refreshBehaviorCacheIfStale() {
-        if (!behaviorPortCache.isEmpty()
-                && (System.currentTimeMillis() - behaviorCacheAt) < BEHAVIOR_CACHE_TTL_MS) {
+        long now = System.currentTimeMillis();
+        if (!behaviorPortCache.isEmpty() && (now - behaviorCacheAt) < BEHAVIOR_CACHE_TTL_MS) {
             return;
         }
+        // Negative caching: if the cache is still empty and we attempted a refresh very
+        // recently, skip the blocking control-API round trip so a down/slow control API
+        // cannot make every rule-creation request stall for the full request timeout.
+        if (behaviorPortCache.isEmpty() && (now - lastRefreshAttemptAt) < BEHAVIOR_NEGATIVE_TTL_MS) {
+            return;
+        }
+        lastRefreshAttemptAt = now;
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(config.getControlUrl() + "/config"))

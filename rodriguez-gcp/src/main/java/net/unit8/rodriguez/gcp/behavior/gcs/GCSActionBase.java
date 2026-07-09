@@ -1,10 +1,9 @@
 package net.unit8.rodriguez.gcp.behavior.gcs;
 
 import net.unit8.rodriguez.gcp.GCSException;
-import net.unit8.rodriguez.util.PathContainment;
+import net.unit8.rodriguez.util.ContainedStorage;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -17,6 +16,18 @@ import java.util.*;
  */
 public abstract class GCSActionBase<T> implements GCSMockAction<T> {
     private File gcsDirectory;
+
+    private final ContainedStorage.ErrorFactory errors = new ContainedStorage.ErrorFactory() {
+        @Override
+        public RuntimeException storageUnavailable(String message) {
+            return new GCSException(500, "GCS " + message);
+        }
+
+        @Override
+        public RuntimeException invalidName(String kind, String name) {
+            return new GCSException(400, "Invalid name (path traversal rejected): " + name);
+        }
+    };
 
     /** Creates a new action instance. */
     protected GCSActionBase() {
@@ -64,9 +75,7 @@ public abstract class GCSActionBase<T> implements GCSMockAction<T> {
      * @throws GCSException if the name is missing or escapes the storage root
      */
     protected Path resolveBucketPath(String bucketName) {
-        Path root = storageRoot();
-        return PathContainment.resolveWithin(root, storageRootReal(root), bucketName, false)
-                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + bucketName));
+        return new ContainedStorage(gcsDirectory, errors).resolveBucket(bucketName);
     }
 
     /**
@@ -83,26 +92,6 @@ public abstract class GCSActionBase<T> implements GCSMockAction<T> {
      * @throws GCSException if either name is missing or escapes its container
      */
     protected Path resolveObjectPath(String bucketName, String objectName) {
-        Path root = storageRoot();
-        Path rootReal = storageRootReal(root);
-        Path bucketPath = PathContainment.resolveWithin(root, rootReal, bucketName, false)
-                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + bucketName));
-        return PathContainment.resolveWithin(bucketPath, rootReal, objectName, false)
-                .orElseThrow(() -> new GCSException(400, "Invalid name (path traversal rejected): " + objectName));
-    }
-
-    private Path storageRoot() {
-        if (gcsDirectory == null) {
-            throw new GCSException(500, "GCS storage directory is not initialized");
-        }
-        return gcsDirectory.toPath().toAbsolutePath().normalize();
-    }
-
-    private Path storageRootReal(Path root) {
-        try {
-            return root.toRealPath();
-        } catch (IOException e) {
-            throw new GCSException(500, "Failed to resolve GCS storage root: " + e.getMessage());
-        }
+        return new ContainedStorage(gcsDirectory, errors).resolveObject(bucketName, objectName);
     }
 }

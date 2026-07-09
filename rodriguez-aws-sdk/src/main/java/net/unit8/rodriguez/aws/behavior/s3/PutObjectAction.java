@@ -26,6 +26,14 @@ public class PutObjectAction extends S3ActionBase<Void> {
         String bucketName = request.getParams().getFirst("BucketName");
         String objectName = request.getParams().getFirst("ObjectName");
         Path path = resolveObjectPath(bucketName, objectName);
+        try {
+            // Object keys may contain '/', addressing a nested path; create the
+            // intermediate directories so a prefixed key (e.g. "logs/2024/app.log")
+            // does not fail with NoSuchFileException.
+            Files.createDirectories(path.getParent());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         try (InputStream in = request.getBody();
              OutputStream out = Files.newOutputStream(path)) {
             long total = 0;

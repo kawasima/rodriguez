@@ -1,5 +1,6 @@
 package net.unit8.rodriguez.gcp.behavior.gcs;
 
+import net.unit8.rodriguez.gcp.GCSException;
 import net.unit8.rodriguez.gcp.GCSRequest;
 
 import java.io.File;
@@ -24,6 +25,11 @@ public class GetObjectMetadataAction extends GCSActionBase<Map<String, Object>> 
         String objectName = request.getQueryParam("_objectName");
 
         File file = resolveObjectPath(bucketName, objectName).toFile();
+        if (!file.isFile() || !file.canRead()) {
+            // The object does not exist: return 404 rather than fabricated metadata
+            // (size 0, epoch timestamps) for a missing key.
+            throw new GCSException(404, "No such object: " + objectName);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("kind", "storage#object");

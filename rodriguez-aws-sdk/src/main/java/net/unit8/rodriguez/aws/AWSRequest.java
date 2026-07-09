@@ -3,6 +3,7 @@ package net.unit8.rodriguez.aws;
 import com.amazonaws.HttpMethod;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import net.unit8.rodriguez.util.BoundedBody;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,9 +26,9 @@ public class AWSRequest implements Serializable {
      * Maximum number of bytes read from a request body into memory.
      *
      * <p>Guards the mock against out-of-memory conditions caused by unbounded
-     * uploads. Defaults to 64 MB.</p>
+     * uploads. Defaults to {@link BoundedBody#DEFAULT_MAX_BODY_SIZE} (64 MB).</p>
      */
-    public static final int MAX_BODY_SIZE = 64 * 1024 * 1024;
+    public static final int MAX_BODY_SIZE = (int) BoundedBody.DEFAULT_MAX_BODY_SIZE;
 
     /**
      * Reads the given input stream fully into memory, rejecting bodies larger
@@ -39,12 +40,11 @@ public class AWSRequest implements Serializable {
      * @throws BodyTooLargeException  if the body exceeds {@link #MAX_BODY_SIZE}
      */
     public static byte[] readBoundedBytes(InputStream in) throws IOException {
-        byte[] data = in.readNBytes(MAX_BODY_SIZE + 1);
-        if (data.length > MAX_BODY_SIZE) {
-            throw new BodyTooLargeException(
-                    "Request body exceeds the maximum allowed size of " + MAX_BODY_SIZE + " bytes");
+        try {
+            return BoundedBody.read(in, MAX_BODY_SIZE);
+        } catch (net.unit8.rodriguez.util.BodyTooLargeException e) {
+            throw new BodyTooLargeException(e.getMessage());
         }
-        return data;
     }
 
     /** The parsed request parameters. */

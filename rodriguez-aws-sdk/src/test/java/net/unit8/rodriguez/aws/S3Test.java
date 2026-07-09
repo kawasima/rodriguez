@@ -72,6 +72,24 @@ public class S3Test {
     }
 
     @Test
+    void putObjectWithNestedKeyCreatesParentDirectories() {
+        s3client.createBucket("my-bucket");
+        // A slash-delimited key addresses a nested path; the mock must create the
+        // intermediate directories instead of failing with 500.
+        PutObjectResult result = s3client.putObject(
+                "my-bucket", "logs/2024/app.log", new File("src/test/resources/test.txt"));
+        assertThat(result.getContentMd5()).isNotNull();
+        assertThat(s3client.getObjectAsString("my-bucket", "logs/2024/app.log")).isNotNull();
+    }
+
+    @Test
+    void deleteMissingObjectIsIdempotent() {
+        s3client.createBucket("my-bucket");
+        // Real S3 DeleteObject is idempotent: deleting a key that never existed succeeds.
+        s3client.deleteObject("my-bucket", "no-such-key");
+    }
+
+    @Test
     void listObjects() {
         s3client.createBucket("my-bucket");
         ObjectListing objectListing = s3client.listObjects("my-bucket");

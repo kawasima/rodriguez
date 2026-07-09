@@ -1,10 +1,9 @@
 package net.unit8.rodriguez.aws.behavior.s3;
 
 import net.unit8.rodriguez.aws.MockAction;
-import net.unit8.rodriguez.util.PathContainment;
+import net.unit8.rodriguez.util.ContainedStorage;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
@@ -18,6 +17,18 @@ import java.util.Optional;
  */
 public abstract class S3ActionBase<T> implements MockAction<T> {
     private File s3Directory;
+
+    private final ContainedStorage.ErrorFactory errors = new ContainedStorage.ErrorFactory() {
+        @Override
+        public RuntimeException storageUnavailable(String message) {
+            return new S3AccessDeniedException("S3 " + message);
+        }
+
+        @Override
+        public RuntimeException invalidName(String kind, String name) {
+            return new S3AccessDeniedException("Invalid or unsafe " + kind + " name: " + name);
+        }
+    };
 
     /**
      * Constructs an S3ActionBase with no directory set.
@@ -66,9 +77,7 @@ public abstract class S3ActionBase<T> implements MockAction<T> {
      *                                 invalid, or the resolved path escapes the root
      */
     protected Path resolveBucketPath(String bucketName) {
-        Path root = storageRoot();
-        return PathContainment.resolveWithin(root, storageRootReal(root), bucketName, false)
-                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe bucket name: " + bucketName));
+        return new ContainedStorage(s3Directory, errors).resolveBucket(bucketName);
     }
 
     /**
@@ -85,26 +94,6 @@ public abstract class S3ActionBase<T> implements MockAction<T> {
      *                                 invalid, or the resolved path escapes its container
      */
     protected Path resolveObjectPath(String bucketName, String objectName) {
-        Path root = storageRoot();
-        Path rootReal = storageRootReal(root);
-        Path bucketPath = PathContainment.resolveWithin(root, rootReal, bucketName, false)
-                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe bucket name: " + bucketName));
-        return PathContainment.resolveWithin(bucketPath, rootReal, objectName, false)
-                .orElseThrow(() -> new S3AccessDeniedException("Invalid or unsafe object name: " + objectName));
-    }
-
-    private Path storageRoot() {
-        if (s3Directory == null) {
-            throw new S3AccessDeniedException("S3 storage directory is not configured");
-        }
-        return s3Directory.toPath().toAbsolutePath().normalize();
-    }
-
-    private Path storageRootReal(Path root) {
-        try {
-            return root.toRealPath();
-        } catch (IOException e) {
-            throw new S3AccessDeniedException("Failed to resolve S3 storage root: " + e.getMessage());
-        }
+        return new ContainedStorage(s3Directory, errors).resolveObject(bucketName, objectName);
     }
 }
