@@ -74,9 +74,22 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
                 throw new UncheckedIOException(e);
             }
         });
-        session.columns = sqlStmt.getColumns();
+        // Row output must be driven by the CSV columns advertised as metadata above,
+        // not by the SQL select-list (which is a single "*" for SELECT *). Otherwise the
+        // per-row value count would not match the column count the client is reading.
 
         return session;
+    }
+
+    private static void closeReader(StatementSession session) {
+        if (session != null && session.reader != null) {
+            try {
+                session.reader.close();
+            } catch (IOException ignore) {
+                // best effort on teardown
+            }
+            session.reader = null;
+        }
     }
 
     private void doNext(StatementSession session, DataInputStream in, DataOutputStream out) throws IOException {
@@ -94,11 +107,14 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
 
     @Override
     public void handle(Socket socket) throws InterruptedException {
+        StatementSession session = null;
         try (DataInputStream is = new DataInputStream(socket.getInputStream());
              DataOutputStream os = new DataOutputStream(socket.getOutputStream())) {
             int queryTimeout = 0;
             DelayTimer timer = null;
-            StatementSession session = null;
+            // Tracks whether the most recent EXECUTE_QUERY timed out, so a following
+            // RS_NEXT reports TIMEOUT rather than a clean empty result set.
+            boolean queryTimedOut = false;
             while(!Thread.interrupted()) {
                 if (socket.isClosed()) {
                     throw new EOFException("socket closed");
@@ -111,43 +127,50 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
 
                 switch (command) {
                     case CLOSE: {
+                        closeReader(session);
+                        session = null;
                         socket.close();
                         Thread.currentThread().interrupt();
                         break;
                     }
                     case EXECUTE_QUERY: {
-                        if (session != null && session.reader != null) {
-                            try {
-                                session.reader.close();
-                            } catch (IOException ignore) {
-                            }
-                        }
+                        closeReader(session);
+                        session = null;
                         getMetricRegistry().counter(MetricRegistry.name(getClass(), "execute-query")).inc();
                         timer = new DelayTimer(queryTimeout);
                         if (timer.isTimeout(delayExecution)) {
+                            queryTimedOut = true;
                             os.writeInt(JDBCCommandStatus.TIMEOUT.ordinal());
                         } else {
+                            queryTimedOut = false;
                             os.writeInt(JDBCCommandStatus.SUCCESS.ordinal());
                             session = doExecute(is, os);
                         }
                         break;
                     }
                     case RS_NEXT: {
-                        if (timer.isTimeout(delayResultSetNext)) {
+                        if (queryTimedOut) {
+                            // The preceding EXECUTE_QUERY timed out, leaving no result set;
+                            // report the timeout rather than a clean empty result set.
+                            os.writeInt(JDBCCommandStatus.TIMEOUT.ordinal());
+                        } else if (timer == null || session == null) {
+                            // RS_NEXT arrived before any EXECUTE_QUERY (or after an update).
+                            // Respond cleanly (no rows) instead of dereferencing a null session.
+                            getMetricRegistry().counter(MetricRegistry.name(getClass(), "protocol-error")).inc();
+                            os.writeInt(JDBCCommandStatus.SUCCESS.ordinal());
+                            os.writeBoolean(false);
+                        } else if (timer.isTimeout(delayResultSetNext)) {
                             os.writeInt(JDBCCommandStatus.TIMEOUT.ordinal());
                         } else {
                             os.writeInt(JDBCCommandStatus.SUCCESS.ordinal());
-                            doNext(Objects.requireNonNull(session), is, os);
+                            doNext(session, is, os);
                         }
                         break;
                     }
                     case EXECUTE_UPDATE: {
-                        if (session != null && session.reader != null) {
-                            try {
-                                session.reader.close();
-                            } catch (IOException ignore) {
-                            }
-                        }
+                        closeReader(session);
+                        session = null;
+                        queryTimedOut = false;
                         getMetricRegistry().counter(MetricRegistry.name(getClass(), "execute-update")).inc();
                         timer = new DelayTimer(queryTimeout);
                         String sql = is.readUTF();
@@ -173,6 +196,13 @@ public class MockDatabase implements SocketInstabilityBehavior, MetricsAvailable
         } catch (IOException e) {
             LOG.log(Level.SEVERE, "Socket error", e);
             getMetricRegistry().counter(MetricRegistry.name(MockDatabase.class, "other-error")).inc();
+        } catch (RuntimeException e) {
+            // A misbehaving client (e.g. out-of-order or malformed commands) must not
+            // silently kill the handler thread; log, record a metric and tear down cleanly.
+            LOG.log(Level.SEVERE, "Unexpected error while handling JDBC connection", e);
+            getMetricRegistry().counter(MetricRegistry.name(MockDatabase.class, "other-error")).inc();
+        } finally {
+            closeReader(session);
         }
     }
 

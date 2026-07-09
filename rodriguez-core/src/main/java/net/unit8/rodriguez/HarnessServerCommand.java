@@ -8,8 +8,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.logging.LogManager;
 
 import static picocli.CommandLine.*;
@@ -55,8 +53,7 @@ public class HarnessServerCommand implements Callable<Integer>, IExitCodeExcepti
             HarnessConfig config = parser.parse(configFile);
             server.getConfig().merge(config);
         }
-        ExecutorService executor = Executors.newCachedThreadPool();
-        server.start(executor);
+        server.start();
         server.await();
         return 0;
     }

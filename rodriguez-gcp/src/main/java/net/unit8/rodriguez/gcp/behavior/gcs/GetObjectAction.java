@@ -19,6 +19,6 @@ public class GetObjectAction extends GCSActionBase<File> {
     public File handle(GCSRequest request) {
         String bucketName = request.getQueryParam("_bucketName");
         String objectName = request.getQueryParam("_objectName");
-        return getGcsDirectory().toPath().resolve(bucketName).resolve(objectName).toFile();
+        return resolveObjectPath(bucketName, objectName).toFile();
     }
 }

@@ -41,7 +41,7 @@ public class ProxyServer {
      */
     public void start() {
         FaultRuleStore store = new FaultRuleStore();
-        ObservedPathStore observedPathStore = new ObservedPathStore();
+        ObservedPathStore observedPathStore = new ObservedPathStore(config.getMaxObservedPaths());
         broadcaster = new EventBroadcaster();
         store.addListener(broadcaster);
         observedPathStore.addObserver(broadcaster);

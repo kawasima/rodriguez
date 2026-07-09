@@ -7,6 +7,7 @@ import jnr.ffi.types.size_t;
 import jnr.posix.FileStat;
 import net.unit8.rodriguez.fuse.fault.CorruptedRead;
 import net.unit8.rodriguez.fuse.fault.FuseFault;
+import net.unit8.rodriguez.util.PathContainment;
 import ru.serce.jnrfuse.ErrorCodes;
 import ru.serce.jnrfuse.FuseFillDir;
 import ru.serce.jnrfuse.FuseStubFS;
@@ -15,6 +16,8 @@ import ru.serce.jnrfuse.struct.Statvfs;
 import ru.serce.jnrfuse.struct.Timespec;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributes;
@@ -36,6 +39,7 @@ public class FaultInjectionFS extends FuseStubFS {
     private static final Logger LOG = Logger.getLogger(FaultInjectionFS.class.getName());
 
     private final Path backingPath;
+    private final Path backingRealPath;
     private final List<FaultRule> faultRules;
 
     /**
@@ -45,16 +49,52 @@ public class FaultInjectionFS extends FuseStubFS {
      * @param faultRules  the list of fault rules to evaluate for each operation
      */
     public FaultInjectionFS(Path backingPath, List<FaultRule> faultRules) {
-        this.backingPath = backingPath;
+        this.backingPath = backingPath.normalize();
+        this.backingRealPath = canonicalizeBacking(this.backingPath);
         this.faultRules = faultRules;
     }
 
+    /**
+     * Resolves the backing directory to its canonical form once, so the per-operation
+     * containment check does not repeat a {@code toRealPath()} syscall on the hot path
+     * (getattr/read/write run on essentially every kernel path lookup). Falls back to
+     * the normalized path if the backing directory cannot yet be canonicalized.
+     */
+    private static Path canonicalizeBacking(Path backingPath) {
+        try {
+            return backingPath.toRealPath();
+        } catch (IOException e) {
+            return backingPath;
+        }
+    }
+
+    /**
+     * Resolves a FUSE path to the corresponding path in the backing directory.
+     *
+     * <p>The resolved path is normalized and checked to ensure it stays within the
+     * backing directory as defense-in-depth against path traversal. Although the VFS
+     * usually strips {@code ..} segments before they reach this layer, a path that
+     * escapes the backing directory returns {@code null} so callers can reject it.
+     *
+     * <p>Lexical containment alone does not defend against a symlink inside the backing
+     * directory that points outside it, because the {@code Files}/{@code FileChannel}
+     * operations that callers perform follow symlinks. As best-effort defense, once the
+     * lexical check passes we resolve the real path of the target (or, for a not-yet-existing
+     * target, its nearest existing ancestor) via {@link Path#toRealPath} and confirm it is
+     * still contained under the backing directory's real path.
+     *
+     * @param path the FUSE path (absolute, rooted at the mount point)
+     * @return the resolved backing path, or {@code null} if it escapes the backing directory
+     */
     private Path resolveRealPath(String path) {
         String relativePath = path.startsWith("/") ? path.substring(1) : path;
         if (relativePath.isEmpty()) {
             return backingPath;
         }
-        return backingPath.resolve(relativePath);
+        // allowBaseItself: a relative path may legitimately normalize to the mount root
+        // (e.g. "."). The symlink real-path check uses the cached canonical backing path.
+        return PathContainment.resolveWithin(backingPath, backingRealPath, relativePath, true)
+                .orElse(null);
     }
 
     private FuseFault findFault(String path, FuseOperation operation) {
@@ -69,6 +109,9 @@ public class FaultInjectionFS extends FuseStubFS {
     @Override
     public int getattr(String path, ru.serce.jnrfuse.struct.FileStat stat) {
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             if (!Files.exists(realPath)) {
                 return -ErrorCodes.ENOENT();
@@ -111,6 +154,9 @@ public class FaultInjectionFS extends FuseStubFS {
     @Override
     public int readdir(String path, Pointer buf, FuseFillDir filter, @off_t long offset, FuseFileInfo fi) {
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         if (!Files.isDirectory(realPath)) {
             return -ErrorCodes.ENOTDIR();
         }
@@ -137,6 +183,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         if (!Files.exists(realPath)) {
             return -ErrorCodes.ENOENT();
         }
@@ -151,6 +200,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.createFile(realPath);
             return 0;
@@ -168,21 +220,37 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
-        try {
-            byte[] data = Files.readAllBytes(realPath);
-            if (offset >= data.length) {
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
+        // Positioned read: only the requested slice is read from disk, so sequential
+        // reads stay O(N) and files larger than Integer.MAX_VALUE are handled correctly.
+        try (FileChannel channel = FileChannel.open(realPath, StandardOpenOption.READ)) {
+            long fileSize = channel.size();
+            if (offset >= fileSize) {
                 return 0;
             }
-            int bytesToRead = (int) Math.min(size, data.length - offset);
-            byte[] readData = new byte[bytesToRead];
-            System.arraycopy(data, (int) offset, readData, 0, bytesToRead);
-
-            if (fault instanceof CorruptedRead corruptedRead && corruptedRead.shouldCorrupt()) {
-                corruptedRead.corruptBuffer(readData, bytesToRead);
+            // Clamp to a safe int: FUSE bounds a single read well below 2 GB, but the
+            // cast must not overflow to a negative/wrong size for ByteBuffer.allocate.
+            int bytesToRead = (int) Math.min(Math.min(size, fileSize - offset), (long) Integer.MAX_VALUE);
+            ByteBuffer bb = ByteBuffer.allocate(bytesToRead);
+            int total = 0;
+            while (total < bytesToRead) {
+                int n = channel.read(bb, offset + total);
+                if (n <= 0) {
+                    // EOF (-1) or, defensively, a 0-byte read: stop rather than spin.
+                    break;
+                }
+                total += n;
             }
 
-            buf.put(0, readData, 0, bytesToRead);
-            return bytesToRead;
+            byte[] readData = bb.array();
+            if (fault instanceof CorruptedRead corruptedRead && corruptedRead.shouldCorrupt()) {
+                corruptedRead.corruptBuffer(readData, total);
+            }
+
+            buf.put(0, readData, 0, total);
+            return total;
         } catch (IOException e) {
             LOG.log(Level.FINE, "read failed for " + path, e);
             return -ErrorCodes.EIO();
@@ -202,21 +270,32 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
-        try {
-            byte[] data = new byte[(int) size];
-            buf.get(0, data, 0, (int) size);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
+        // Positioned write: only the incoming buffer is written, at the given 64-bit
+        // offset. This avoids the O(N^2) read-modify-write of the whole file, keeps
+        // offset as a long (no int truncation for offsets near/above 2GB), and lets
+        // concurrent writes to disjoint ranges coexist without last-writer-wins loss.
+        // Clamp to a safe int: FUSE bounds a single write well below 2 GB, but the cast
+        // must not overflow to a negative length for the array allocation below.
+        int len = (int) Math.min(size, (long) Integer.MAX_VALUE);
+        byte[] data = new byte[len];
+        buf.get(0, data, 0, len);
 
-            if (offset == 0 && !Files.exists(realPath)) {
-                Files.write(realPath, data);
-            } else {
-                byte[] existing = Files.exists(realPath) ? Files.readAllBytes(realPath) : new byte[0];
-                int newLen = Math.max(existing.length, (int) offset + (int) size);
-                byte[] newData = new byte[newLen];
-                System.arraycopy(existing, 0, newData, 0, existing.length);
-                System.arraycopy(data, 0, newData, (int) offset, (int) size);
-                Files.write(realPath, newData);
+        try (FileChannel channel = FileChannel.open(realPath,
+                StandardOpenOption.WRITE, StandardOpenOption.CREATE)) {
+            ByteBuffer bb = ByteBuffer.wrap(data);
+            int total = 0;
+            while (bb.hasRemaining()) {
+                int n = channel.write(bb, offset + total);
+                if (n <= 0) {
+                    // Defensively stop on a 0-byte write rather than spin forever.
+                    break;
+                }
+                total += n;
             }
-            return (int) size;
+            return total;
         } catch (IOException e) {
             LOG.log(Level.FINE, "write failed for " + path, e);
             return -ErrorCodes.EIO();
@@ -231,6 +310,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             if (size == 0) {
                 Files.write(realPath, new byte[0]);
@@ -273,6 +355,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.createDirectory(realPath);
             return 0;
@@ -290,6 +375,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.delete(realPath);
             return 0;
@@ -307,6 +395,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.delete(realPath);
             return 0;
@@ -325,6 +416,9 @@ public class FaultInjectionFS extends FuseStubFS {
 
         Path realOld = resolveRealPath(oldpath);
         Path realNew = resolveRealPath(newpath);
+        if (realOld == null || realNew == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.move(realOld, realNew, StandardCopyOption.REPLACE_EXISTING);
             return 0;

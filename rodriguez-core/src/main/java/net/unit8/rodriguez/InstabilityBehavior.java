@@ -3,8 +3,6 @@ package net.unit8.rodriguez;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.annotation.JsonTypeIdResolver;
 
-import java.util.concurrent.Executor;
-
 /**
  * Base interface for all fault injection behaviors.
  *
@@ -27,9 +25,12 @@ public interface InstabilityBehavior {
     /**
      * Creates and starts a server that exhibits this instability behavior on the given port.
      *
-     * @param executor the executor to use for handling connections
-     * @param port     the port number to listen on
+     * <p>Each behavior owns the thread resources it needs for handling connections and
+     * releases them when the returned shutdown {@link Runnable} is invoked, so that
+     * thread exhaustion on one port cannot affect other ports.
+     *
+     * @param port the port number to listen on
      * @return a {@link Runnable} that, when invoked, shuts down the created server
      */
-    Runnable createServer(Executor executor, int port);
+    Runnable createServer(int port);
 }

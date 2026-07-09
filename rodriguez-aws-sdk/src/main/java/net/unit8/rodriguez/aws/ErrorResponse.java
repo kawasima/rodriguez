@@ -26,6 +26,26 @@ public class ErrorResponse {
     }
 
     /**
+     * Creates a 403 Forbidden error response, used when a request attempts to
+     * access a path outside the configured storage root.
+     *
+     * @return a new {@code ErrorResponse} with status 403
+     */
+    public static ErrorResponse forbidden() {
+        return new ErrorResponse(403, "access denied");
+    }
+
+    /**
+     * Creates a 413 Payload Too Large error response, used when a request body
+     * exceeds the configured maximum size.
+     *
+     * @return a new {@code ErrorResponse} with status 413
+     */
+    public static ErrorResponse payloadTooLarge() {
+        return new ErrorResponse(413, "request entity too large");
+    }
+
+    /**
      * Writes this error response to the given HTTP exchange.
      *
      * @param exchange the HTTP exchange to write the error response to

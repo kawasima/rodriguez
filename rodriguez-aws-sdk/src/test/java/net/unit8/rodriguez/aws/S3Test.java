@@ -3,6 +3,7 @@ package net.unit8.rodriguez.aws;
 import com.amazonaws.client.builder.AwsClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.PutObjectResult;
@@ -14,6 +15,10 @@ import org.junit.jupiter.api.*;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -21,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class S3Test {
     AmazonS3 s3client;
@@ -66,6 +72,24 @@ public class S3Test {
     }
 
     @Test
+    void putObjectWithNestedKeyCreatesParentDirectories() {
+        s3client.createBucket("my-bucket");
+        // A slash-delimited key addresses a nested path; the mock must create the
+        // intermediate directories instead of failing with 500.
+        PutObjectResult result = s3client.putObject(
+                "my-bucket", "logs/2024/app.log", new File("src/test/resources/test.txt"));
+        assertThat(result.getContentMd5()).isNotNull();
+        assertThat(s3client.getObjectAsString("my-bucket", "logs/2024/app.log")).isNotNull();
+    }
+
+    @Test
+    void deleteMissingObjectIsIdempotent() {
+        s3client.createBucket("my-bucket");
+        // Real S3 DeleteObject is idempotent: deleting a key that never existed succeeds.
+        s3client.deleteObject("my-bucket", "no-such-key");
+    }
+
+    @Test
     void listObjects() {
         s3client.createBucket("my-bucket");
         ObjectListing objectListing = s3client.listObjects("my-bucket");
@@ -75,6 +99,46 @@ public class S3Test {
     void listBuckets() {
         s3client.createBucket("my-bucket");
         List<Bucket> buckets = s3client.listBuckets();
+    }
+
+    @Test
+    void getMissingObjectReturns404() {
+        s3client.createBucket("my-bucket");
+        assertThatThrownBy(() -> s3client.getObject("my-bucket", "no-such-key"))
+                .isInstanceOf(AmazonS3Exception.class)
+                .satisfies(e -> assertThat(((AmazonS3Exception) e).getStatusCode()).isEqualTo(404));
+    }
+
+    @Test
+    void listObjectsRejectsTraversalBucketName() throws Exception {
+        s3client.createBucket("my-bucket");
+        // A traversing BucketName passed via the query string must not list a
+        // directory outside the storage root; it is rejected with 403.
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:10202/?BucketName=..%2F..%2F..%2F..%2Fetc"))
+                .GET()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.body()).doesNotContain("passwd");
+    }
+
+    @Test
+    void deleteBucketDotIsRejectedAndDoesNotWipeRoot() throws Exception {
+        s3client.createBucket("sentinel-bucket");
+        // "%2e" decodes to a "." bucket name that normalizes back to the storage root.
+        // DeleteBucket on it would recursively delete every bucket; it must be rejected.
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:10202/%2e"))
+                .DELETE()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(403);
+        // The storage root and its buckets survive.
+        assertThat(s3client.listBuckets())
+                .anySatisfy(b -> assertThat(b.getName()).isEqualTo("sentinel-bucket"));
     }
 
     @AfterEach

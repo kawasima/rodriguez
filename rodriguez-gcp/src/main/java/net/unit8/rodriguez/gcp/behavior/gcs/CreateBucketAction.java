@@ -22,7 +22,7 @@ public class CreateBucketAction extends GCSActionBase<Map<String, Object>> {
     @Override
     public Map<String, Object> handle(GCSRequest request) {
         String bucketName = request.getQueryParam("_bucketName");
-        File bucketDir = new File(getGcsDirectory(), bucketName);
+        File bucketDir = resolveBucketPath(bucketName).toFile();
         if (!bucketDir.exists()) {
             bucketDir.mkdir();
         }
