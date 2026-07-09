@@ -16,7 +16,7 @@ public class DeleteObjectAction extends GCSActionBase<Void> {
     public Void handle(GCSRequest request) {
         String bucketName = request.getQueryParam("_bucketName");
         String objectName = request.getQueryParam("_objectName");
-        File file = getGcsDirectory().toPath().resolve(bucketName).resolve(objectName).toFile();
+        File file = resolveObjectPath(bucketName, objectName).toFile();
         file.delete();
         return null;
     }

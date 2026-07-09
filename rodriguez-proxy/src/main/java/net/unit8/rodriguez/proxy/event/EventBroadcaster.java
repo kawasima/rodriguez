@@ -11,7 +11,9 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -33,6 +35,14 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
         t.setDaemon(true);
         return t;
     });
+    // All writes to client streams happen on this single dispatcher thread. This keeps
+    // slow/stalled SSE readers from blocking request/store threads, and serializes writes
+    // to each stream so concurrent broadcasts cannot interleave (corrupting SSE framing).
+    private final ExecutorService dispatcher = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "sse-dispatch");
+        t.setDaemon(true);
+        return t;
+    });
 
     /** Creates a new EventBroadcaster and starts the SSE heartbeat. */
     public EventBroadcaster() {
@@ -51,15 +61,7 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
     }
 
     private void sendHeartbeat() {
-        byte[] bytes = ": keep-alive\n\n".getBytes(StandardCharsets.UTF_8);
-        for (OutputStream os : clients) {
-            try {
-                os.write(bytes);
-                os.flush();
-            } catch (IOException e) {
-                clients.remove(os);
-            }
-        }
+        dispatch(": keep-alive\n\n".getBytes(StandardCharsets.UTF_8));
     }
 
     private void broadcast(FaultEvent event) {
@@ -70,22 +72,27 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
             LOG.log(Level.WARNING, "Failed to serialize event", e);
             return;
         }
-        String sseMessage = "event: " + event.type() + "\ndata: " + json + "\n\n";
-        byte[] bytes = sseMessage.getBytes(StandardCharsets.UTF_8);
-
-        for (OutputStream os : clients) {
-            try {
-                os.write(bytes);
-                os.flush();
-            } catch (IOException e) {
-                clients.remove(os);
-            }
-        }
+        broadcastRaw(event.type(), json);
     }
 
     private void broadcastRaw(String eventType, String json) {
         String sseMessage = "event: " + eventType + "\ndata: " + json + "\n\n";
-        byte[] bytes = sseMessage.getBytes(StandardCharsets.UTF_8);
+        dispatch(sseMessage.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Queues a write of the given bytes to every connected client on the dispatcher
+     * thread, so a slow reader cannot block the calling request/store thread.
+     */
+    private void dispatch(byte[] bytes) {
+        try {
+            dispatcher.execute(() -> writeToAll(bytes));
+        } catch (RejectedExecutionException e) {
+            // Broadcaster is shutting down; drop the event.
+        }
+    }
+
+    private void writeToAll(byte[] bytes) {
         for (OutputStream os : clients) {
             try {
                 os.write(bytes);
@@ -129,6 +136,7 @@ public class EventBroadcaster implements FaultRuleStore.FaultRuleListener, Obser
      */
     public void shutdown() {
         scheduler.shutdownNow();
+        dispatcher.shutdownNow();
         for (OutputStream os : clients) {
             try {
                 os.close();

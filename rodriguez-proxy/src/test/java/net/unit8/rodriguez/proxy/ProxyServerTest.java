@@ -360,6 +360,67 @@ class ProxyServerTest {
 
     // ---- API: TTL duration ----
 
+    // ---- API: SSRF / input validation ----
+
+    @Test
+    void createRuleWithDisallowedFaultPortReturns400() throws Exception {
+        // 9999 is a valid port number but not a Rodriguez fault port advertised by the
+        // control API, so it must be rejected (SSRF / open-relay guard).
+        String ruleBody = mapper.writeValueAsString(Map.of(
+                "pathPattern", "/api/ssrf",
+                "faultType", "SlowResponse",
+                "faultPort", 9999,
+                "count", 1));
+
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(ruleBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(mapper.readTree(response.body()).get("error").asText())
+                .contains("not an allowed");
+    }
+
+    @Test
+    void createRuleWithNonNumericCountReturns400() throws Exception {
+        String ruleBody = mapper.writeValueAsString(Map.of(
+                "pathPattern", "/api/badcount",
+                "faultType", "SlowResponse",
+                "faultPort", FAULT_PORT,
+                "count", "not-a-number"));
+
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/_proxy/api/rules"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(ruleBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(mapper.readTree(response.body()).get("error").asText())
+                .contains("count");
+    }
+
+    @Test
+    void oversizedRequestBodyReturns413() throws Exception {
+        // Body larger than the default 10 MB limit must be rejected before forwarding.
+        byte[] oversized = new byte[(int) (10L * 1024 * 1024) + 1];
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + PROXY_PORT + "/api/echo"))
+                        .header("Content-Type", "application/octet-stream")
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(oversized))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(413);
+    }
+
     @Test
     void ruleExpiresAfterDuration() throws Exception {
         // Create a rule with 1-second TTL matching /api/hello

@@ -15,6 +15,8 @@ import ru.serce.jnrfuse.struct.Statvfs;
 import ru.serce.jnrfuse.struct.Timespec;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFileAttributes;
@@ -45,16 +47,31 @@ public class FaultInjectionFS extends FuseStubFS {
      * @param faultRules  the list of fault rules to evaluate for each operation
      */
     public FaultInjectionFS(Path backingPath, List<FaultRule> faultRules) {
-        this.backingPath = backingPath;
+        this.backingPath = backingPath.normalize();
         this.faultRules = faultRules;
     }
 
+    /**
+     * Resolves a FUSE path to the corresponding path in the backing directory.
+     *
+     * <p>The resolved path is normalized and checked to ensure it stays within the
+     * backing directory as defense-in-depth against path traversal. Although the VFS
+     * usually strips {@code ..} segments before they reach this layer, a path that
+     * escapes the backing directory returns {@code null} so callers can reject it.
+     *
+     * @param path the FUSE path (absolute, rooted at the mount point)
+     * @return the resolved backing path, or {@code null} if it escapes the backing directory
+     */
     private Path resolveRealPath(String path) {
         String relativePath = path.startsWith("/") ? path.substring(1) : path;
         if (relativePath.isEmpty()) {
             return backingPath;
         }
-        return backingPath.resolve(relativePath);
+        Path resolved = backingPath.resolve(relativePath).normalize();
+        if (!resolved.startsWith(backingPath)) {
+            return null;
+        }
+        return resolved;
     }
 
     private FuseFault findFault(String path, FuseOperation operation) {
@@ -69,6 +86,9 @@ public class FaultInjectionFS extends FuseStubFS {
     @Override
     public int getattr(String path, ru.serce.jnrfuse.struct.FileStat stat) {
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             if (!Files.exists(realPath)) {
                 return -ErrorCodes.ENOENT();
@@ -111,6 +131,9 @@ public class FaultInjectionFS extends FuseStubFS {
     @Override
     public int readdir(String path, Pointer buf, FuseFillDir filter, @off_t long offset, FuseFileInfo fi) {
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         if (!Files.isDirectory(realPath)) {
             return -ErrorCodes.ENOTDIR();
         }
@@ -137,6 +160,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         if (!Files.exists(realPath)) {
             return -ErrorCodes.ENOENT();
         }
@@ -151,6 +177,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.createFile(realPath);
             return 0;
@@ -168,21 +197,34 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
-        try {
-            byte[] data = Files.readAllBytes(realPath);
-            if (offset >= data.length) {
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
+        // Positioned read: only the requested slice is read from disk, so sequential
+        // reads stay O(N) and files larger than Integer.MAX_VALUE are handled correctly.
+        try (FileChannel channel = FileChannel.open(realPath, StandardOpenOption.READ)) {
+            long fileSize = channel.size();
+            if (offset >= fileSize) {
                 return 0;
             }
-            int bytesToRead = (int) Math.min(size, data.length - offset);
-            byte[] readData = new byte[bytesToRead];
-            System.arraycopy(data, (int) offset, readData, 0, bytesToRead);
-
-            if (fault instanceof CorruptedRead corruptedRead && corruptedRead.shouldCorrupt()) {
-                corruptedRead.corruptBuffer(readData, bytesToRead);
+            int bytesToRead = (int) Math.min(size, fileSize - offset);
+            ByteBuffer bb = ByteBuffer.allocate(bytesToRead);
+            int total = 0;
+            while (total < bytesToRead) {
+                int n = channel.read(bb, offset + total);
+                if (n < 0) {
+                    break;
+                }
+                total += n;
             }
 
-            buf.put(0, readData, 0, bytesToRead);
-            return bytesToRead;
+            byte[] readData = bb.array();
+            if (fault instanceof CorruptedRead corruptedRead && corruptedRead.shouldCorrupt()) {
+                corruptedRead.corruptBuffer(readData, total);
+            }
+
+            buf.put(0, readData, 0, total);
+            return total;
         } catch (IOException e) {
             LOG.log(Level.FINE, "read failed for " + path, e);
             return -ErrorCodes.EIO();
@@ -202,21 +244,29 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
-        try {
-            byte[] data = new byte[(int) size];
-            buf.get(0, data, 0, (int) size);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
+        // Positioned write: only the incoming buffer is written, at the given 64-bit
+        // offset. This avoids the O(N^2) read-modify-write of the whole file, keeps
+        // offset as a long (no int truncation for offsets near/above 2GB), and lets
+        // concurrent writes to disjoint ranges coexist without last-writer-wins loss.
+        int len = (int) size;
+        byte[] data = new byte[len];
+        buf.get(0, data, 0, len);
 
-            if (offset == 0 && !Files.exists(realPath)) {
-                Files.write(realPath, data);
-            } else {
-                byte[] existing = Files.exists(realPath) ? Files.readAllBytes(realPath) : new byte[0];
-                int newLen = Math.max(existing.length, (int) offset + (int) size);
-                byte[] newData = new byte[newLen];
-                System.arraycopy(existing, 0, newData, 0, existing.length);
-                System.arraycopy(data, 0, newData, (int) offset, (int) size);
-                Files.write(realPath, newData);
+        try (FileChannel channel = FileChannel.open(realPath,
+                StandardOpenOption.WRITE, StandardOpenOption.CREATE)) {
+            ByteBuffer bb = ByteBuffer.wrap(data);
+            int total = 0;
+            while (bb.hasRemaining()) {
+                int n = channel.write(bb, offset + total);
+                if (n < 0) {
+                    break;
+                }
+                total += n;
             }
-            return (int) size;
+            return total;
         } catch (IOException e) {
             LOG.log(Level.FINE, "write failed for " + path, e);
             return -ErrorCodes.EIO();
@@ -231,6 +281,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             if (size == 0) {
                 Files.write(realPath, new byte[0]);
@@ -273,6 +326,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.createDirectory(realPath);
             return 0;
@@ -290,6 +346,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.delete(realPath);
             return 0;
@@ -307,6 +366,9 @@ public class FaultInjectionFS extends FuseStubFS {
         }
 
         Path realPath = resolveRealPath(path);
+        if (realPath == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.delete(realPath);
             return 0;
@@ -325,6 +387,9 @@ public class FaultInjectionFS extends FuseStubFS {
 
         Path realOld = resolveRealPath(oldpath);
         Path realNew = resolveRealPath(newpath);
+        if (realOld == null || realNew == null) {
+            return -ErrorCodes.EACCES();
+        }
         try {
             Files.move(realOld, realNew, StandardCopyOption.REPLACE_EXISTING);
             return 0;

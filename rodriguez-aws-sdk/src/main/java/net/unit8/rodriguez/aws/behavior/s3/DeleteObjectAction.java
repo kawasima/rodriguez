@@ -23,7 +23,7 @@ public class DeleteObjectAction extends S3ActionBase<Void> {
         String bucketName = request.getParams().getFirst("BucketName");
         String objectName = request.getParams().getFirst("ObjectName");
 
-        Path objectFile = getS3Directory().toPath().resolve(bucketName).resolve(objectName);
+        Path objectFile = resolveObjectPath(bucketName, objectName);
         try {
             Files.delete(objectFile);
         } catch (IOException e) {

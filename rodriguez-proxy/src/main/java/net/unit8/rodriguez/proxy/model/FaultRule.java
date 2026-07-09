@@ -15,6 +15,19 @@ import java.util.regex.Pattern;
  * An optional {@code duration} causes the rule to expire after the specified time.
  */
 public class FaultRule {
+    /**
+     * Maximum accepted length of a {@code pathPattern} regex. A short cap on both the
+     * pattern and the matched input materially reduces the blast radius of a
+     * catastrophic-backtracking (ReDoS) pattern such as {@code (a+)+$}.
+     */
+    public static final int MAX_PATTERN_LENGTH = 1000;
+
+    /**
+     * Maximum request-path length matched against a pattern. Longer paths are treated
+     * as non-matching rather than fed to the regex engine, bounding backtracking cost.
+     */
+    public static final int MAX_MATCH_INPUT_LENGTH = 4000;
+
     private static final Pattern DURATION_SHORTHAND = Pattern.compile("(\\d+)([smh])");
 
     private final String id;
@@ -48,6 +61,10 @@ public class FaultRule {
      * @param durationString TTL in shorthand format (e.g., "30s", "5m", "1h"), or null for no expiry
      */
     public FaultRule(String pathPattern, String faultType, int faultPort, int count, String durationString) {
+        if (pathPattern != null && pathPattern.length() > MAX_PATTERN_LENGTH) {
+            throw new IllegalArgumentException(
+                    "pathPattern exceeds maximum length of " + MAX_PATTERN_LENGTH);
+        }
         this.id = UUID.randomUUID().toString();
         this.pathPattern = pathPattern;
         this.compiledPattern = Pattern.compile(pathPattern);
@@ -65,6 +82,9 @@ public class FaultRule {
      * @return true if the path matches
      */
     public boolean matches(String path) {
+        if (path == null || path.length() > MAX_MATCH_INPUT_LENGTH) {
+            return false;
+        }
         return compiledPattern.matcher(path).matches();
     }
 

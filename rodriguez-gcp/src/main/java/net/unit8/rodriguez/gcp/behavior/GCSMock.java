@@ -5,12 +5,14 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.sun.net.httpserver.HttpExchange;
 import net.unit8.rodriguez.HttpInstabilityBehavior;
 import net.unit8.rodriguez.MetricsAvailable;
+import net.unit8.rodriguez.gcp.GCSException;
 import net.unit8.rodriguez.gcp.GCSRequest;
 import net.unit8.rodriguez.gcp.behavior.gcs.GCSAction;
 import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.*;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -53,7 +55,7 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
         mapper.registerModule(new JavaTimeModule());
     }
 
-    private void ensureGcsDirectory() {
+    private synchronized void ensureGcsDirectory() {
         if (gcsDirectory == null) {
             try {
                 gcsDirectory = Files.createTempDirectory("rodriguez-gcs").toFile();
@@ -120,6 +122,13 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
                 exchange.sendResponseHeaders(200, jsonBytes.length);
                 exchange.getResponseBody().write(jsonBytes);
             }
+        } catch (GCSException e) {
+            LOG.warning("GCSMock: " + e.getStatusCode() + " " + e.getMessage());
+            getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "client-error"));
+            try {
+                sendError(exchange, e.getStatusCode(), e.getMessage());
+            } catch (IOException ignore) {
+            }
         } catch (Exception e) {
             LOG.severe("GCSMock error: " + e.getMessage());
             getMetricRegistry().counter(MetricRegistry.name(GCSMock.class, "other-error"));
@@ -130,6 +139,29 @@ public class GCSMock implements HttpInstabilityBehavior, MetricsAvailable {
         } finally {
             exchange.close();
         }
+    }
+
+    /**
+     * Writes a GCS JSON API style error response.
+     *
+     * @param exchange the HTTP exchange to write to
+     * @param status   the HTTP status code
+     * @param message  the error message
+     * @throws IOException if writing the response fails
+     */
+    private void sendError(HttpExchange exchange, int status, String message) throws IOException {
+        Map<String, Object> error = Map.of(
+                "error", Map.of(
+                        "code", status,
+                        "message", message,
+                        "errors", List.of(Map.of(
+                                "domain", "global",
+                                "reason", "invalid",
+                                "message", message))));
+        byte[] body = mapper.writeValueAsBytes(error);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, body.length);
+        exchange.getResponseBody().write(body);
     }
 
     private void parsePath(GCSRequest request, String path) {

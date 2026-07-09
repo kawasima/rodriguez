@@ -43,8 +43,17 @@ public class ConnectionImpl implements Connection {
      * @throws SQLException if a socket connection cannot be established
      */
     public ConnectionImpl(String url, Properties info) throws SQLException {
-        String name = url.substring("jdbc:rodriguez:".length());
-        URI uri = URI.create(name);
+        final String prefix = "jdbc:rodriguez:";
+        if (url == null || !url.startsWith(prefix)) {
+            throw new SQLException("Invalid Rodriguez JDBC URL: " + url);
+        }
+        String name = url.substring(prefix.length());
+        final URI uri;
+        try {
+            uri = URI.create(name);
+        } catch (IllegalArgumentException e) {
+            throw new SQLException("Invalid Rodriguez JDBC URL: " + url, e);
+        }
         try {
             socket = new Socket(uri.getHost(), uri.getPort());
         } catch (IOException e) {

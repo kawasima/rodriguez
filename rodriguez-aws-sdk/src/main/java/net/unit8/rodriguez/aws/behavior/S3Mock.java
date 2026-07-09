@@ -7,8 +7,10 @@ import com.sun.net.httpserver.HttpExchange;
 import net.unit8.rodriguez.HttpInstabilityBehavior;
 import net.unit8.rodriguez.MetricsAvailable;
 import net.unit8.rodriguez.aws.AWSRequest;
+import net.unit8.rodriguez.aws.BodyTooLargeException;
 import net.unit8.rodriguez.aws.ErrorResponse;
 import net.unit8.rodriguez.aws.behavior.s3.S3Action;
+import net.unit8.rodriguez.aws.behavior.s3.S3AccessDeniedException;
 import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.*;
@@ -52,7 +54,15 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
                 .filter(path -> !path.isEmpty() && !"/".equals(path))
                 .map(path -> path.substring(1))
                 .map(path -> path.contains("/") ? path.substring(0, path.indexOf('/')) : path)
+                .map(this::validateBucketSegment)
                 .orElseGet(() -> getBucketNameFromHost(exchange));
+    }
+
+    private String validateBucketSegment(String bucket) {
+        if (bucket.isEmpty() || bucket.equals("..")) {
+            throw new S3AccessDeniedException("Invalid bucket name: '" + bucket + "'");
+        }
+        return bucket;
     }
 
     private String getBucketNameFromHost(HttpExchange exchange) {
@@ -132,6 +142,14 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
                 LOG.fine(mapper.writeValueAsString(response));
                 mapper.writeValue(exchange.getResponseBody(), response);
             }
+        } catch (S3AccessDeniedException e) {
+            LOG.warning("S3Mock access denied: " + e.getMessage());
+            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "access-denied"));
+            sendError(exchange, ErrorResponse.forbidden());
+        } catch (BodyTooLargeException e) {
+            LOG.warning("S3Mock body too large: " + e.getMessage());
+            getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "body-too-large"));
+            sendError(exchange, ErrorResponse.payloadTooLarge());
         } catch (Exception e) {
             LOG.severe("S3Mock error: " + e.getMessage());
             getMetricRegistry().counter(MetricRegistry.name(S3Mock.class, "other-error"));
@@ -142,6 +160,14 @@ public class S3Mock implements HttpInstabilityBehavior, MetricsAvailable {
             }
         } finally {
             exchange.close();
+        }
+    }
+
+    private void sendError(HttpExchange exchange, ErrorResponse error) {
+        try {
+            error.handle(exchange);
+        } catch (IOException ignore) {
+            // response could not be sent; the connection will be closed in finally
         }
     }
 

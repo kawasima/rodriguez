@@ -3,6 +3,7 @@ package net.unit8.rodriguez.fuse.fault;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class FaultTest {
 
@@ -76,6 +77,14 @@ class FaultTest {
             }
         }
         assertThat(anyDifferent).isTrue();
+    }
+
+    @Test
+    void corruptedReadHandlesZeroLengthBuffer() {
+        CorruptedRead fault = new CorruptedRead(1.0);
+        // A zero-length read must be a no-op rather than throwing from random.nextInt(0).
+        assertThatCode(() -> fault.corruptBuffer(new byte[0], 0))
+                .doesNotThrowAnyException();
     }
 
     @Test

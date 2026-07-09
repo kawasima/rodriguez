@@ -17,9 +17,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -45,8 +48,11 @@ public class ApiHandler implements HttpHandler {
     private final ObservedPathStore observedPathStore;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Map<String, Integer> behaviorPortCache = new ConcurrentHashMap<>();
-    private final Map<String, Long> behaviorPortCacheTime = new ConcurrentHashMap<>();
+    private volatile Set<Integer> knownFaultPorts = Set.of();
+    private volatile long behaviorCacheAt = 0L;
     private static final long BEHAVIOR_CACHE_TTL_MS = 60_000L;
+    /** Upper bound on the per-rule request count, to reject absurd/negative values. */
+    private static final int MAX_RULE_COUNT = 1_000_000;
 
     /**
      * Creates a new API handler.
@@ -117,7 +123,9 @@ public class ApiHandler implements HttpHandler {
                 }
             }
         } catch (Exception e) {
-            byte[] error = mapper.writeValueAsBytes(Map.of("error", e.getMessage()));
+            // Log the detail server-side; never leak exception text to the client.
+            LOG.log(Level.WARNING, "Error handling API request " + method + " " + path, e);
+            byte[] error = mapper.writeValueAsBytes(Map.of("error", "Internal server error"));
             sendJson(exchange, 500, error);
         } finally {
             exchange.close();
@@ -145,11 +153,47 @@ public class ApiHandler implements HttpHandler {
             return;
         }
 
-        int count = json.containsKey("count") ? ((Number) json.get("count")).intValue() : 1;
+        if (pathPattern.length() > FaultRule.MAX_PATTERN_LENGTH) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(Map.of(
+                    "error", "pathPattern exceeds maximum length of " + FaultRule.MAX_PATTERN_LENGTH)));
+            return;
+        }
+
+        int count = 1;
+        if (json.containsKey("count")) {
+            if (!(json.get("count") instanceof Number number)) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(
+                        Map.of("error", "count must be a number")));
+                return;
+            }
+            count = number.intValue();
+        }
+        if (count < 1 || count > MAX_RULE_COUNT) {
+            sendJson(exchange, 400, mapper.writeValueAsBytes(
+                    Map.of("error", "count must be between 1 and " + MAX_RULE_COUNT)));
+            return;
+        }
 
         int faultPort;
         if (json.containsKey("faultPort")) {
-            faultPort = ((Number) json.get("faultPort")).intValue();
+            if (!(json.get("faultPort") instanceof Number number)) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(
+                        Map.of("error", "faultPort must be a number")));
+                return;
+            }
+            faultPort = number.intValue();
+            if (faultPort < 1 || faultPort > 65535) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(
+                        Map.of("error", "faultPort must be between 1 and 65535")));
+                return;
+            }
+            // SSRF guard: only allow forwarding to legitimate Rodriguez fault ports,
+            // never an arbitrary client-chosen localhost port.
+            if (!isFaultPortAllowed(faultPort)) {
+                sendJson(exchange, 400, mapper.writeValueAsBytes(Map.of(
+                        "error", "faultPort " + faultPort + " is not an allowed Rodriguez fault port")));
+                return;
+            }
         } else {
             Integer resolved = resolveFaultPort(faultType);
             if (resolved == null) {
@@ -158,12 +202,6 @@ public class ApiHandler implements HttpHandler {
                 return;
             }
             faultPort = resolved;
-        }
-
-        if (faultPort < 1 || faultPort > 65535) {
-            sendJson(exchange, 400, mapper.writeValueAsBytes(
-                    Map.of("error", "faultPort must be between 1 and 65535")));
-            return;
         }
 
         String duration = (String) json.get("duration");
@@ -233,11 +271,36 @@ public class ApiHandler implements HttpHandler {
     }
 
     private Integer resolveFaultPort(String faultType) {
-        Integer cached = behaviorPortCache.get(faultType);
-        Long cachedAt = behaviorPortCacheTime.get(faultType);
-        if (cached != null && cachedAt != null
-                && (System.currentTimeMillis() - cachedAt) < BEHAVIOR_CACHE_TTL_MS) {
-            return cached;
+        refreshBehaviorCacheIfStale();
+        return behaviorPortCache.get(faultType);
+    }
+
+    /**
+     * Returns whether the client-supplied fault port may be targeted.
+     *
+     * <p>If an explicit allow-list is configured it is authoritative; otherwise the
+     * proxy falls back to the set of behavior ports advertised by the control API.
+     * This blocks the proxy from being used as an arbitrary localhost-port relay.
+     *
+     * @param port the candidate fault port
+     * @return true if the port is a legitimate Rodriguez fault port
+     */
+    private boolean isFaultPortAllowed(int port) {
+        if (config.hasAllowedFaultPorts()) {
+            return config.isFaultPortAllowed(port);
+        }
+        refreshBehaviorCacheIfStale();
+        return knownFaultPorts.contains(port);
+    }
+
+    /**
+     * Refreshes the cached view of the control API's advertised behavior ports
+     * (both the faultType-to-port map and the set of known ports) when stale.
+     */
+    private synchronized void refreshBehaviorCacheIfStale() {
+        if (!behaviorPortCache.isEmpty()
+                && (System.currentTimeMillis() - behaviorCacheAt) < BEHAVIOR_CACHE_TTL_MS) {
+            return;
         }
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -247,12 +310,17 @@ public class ApiHandler implements HttpHandler {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             JsonNode ports = mapper.readTree(response.body()).get("ports");
             if (ports != null) {
-                long now = System.currentTimeMillis();
+                Map<String, Integer> types = new HashMap<>();
+                Set<Integer> portSet = new HashSet<>();
                 for (var entry : ports.properties()) {
+                    int port = Integer.parseInt(entry.getKey());
                     String type = entry.getValue().path("type").asText();
-                    behaviorPortCache.put(type, Integer.parseInt(entry.getKey()));
-                    behaviorPortCacheTime.put(type, now);
+                    types.put(type, port);
+                    portSet.add(port);
                 }
+                behaviorPortCache.putAll(types);
+                knownFaultPorts = Set.copyOf(portSet);
+                behaviorCacheAt = System.currentTimeMillis();
             }
         } catch (IOException | InterruptedException e) {
             LOG.log(Level.WARNING, "Failed to fetch behaviors from control API", e);
@@ -260,7 +328,6 @@ public class ApiHandler implements HttpHandler {
                 Thread.currentThread().interrupt();
             }
         }
-        return behaviorPortCache.get(faultType);
     }
 
     private Map<String, Object> ruleToMap(FaultRule rule) {

@@ -5,12 +5,12 @@ import com.sun.net.httpserver.HttpExchange;
 import net.unit8.rodriguez.HttpInstabilityBehavior;
 import net.unit8.rodriguez.MetricsAvailable;
 import net.unit8.rodriguez.aws.AWSRequest;
+import net.unit8.rodriguez.aws.BodyTooLargeException;
 import net.unit8.rodriguez.aws.RequestParams;
 import net.unit8.rodriguez.aws.behavior.sqs.SQSAction;
 import net.unit8.rodriguez.metrics.MetricRegistry;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
@@ -56,7 +56,7 @@ public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
             final RequestParams params;
             if (isJsonProtocol) {
                 params = new RequestParams();
-                byte[] body = exchange.getRequestBody().readAllBytes();
+                byte[] body = AWSRequest.readBoundedBytes(exchange.getRequestBody());
                 if (body.length > 0) {
                     Map<String, Object> json = mapper.readValue(body, Map.class);
                     json.forEach((k, v) -> {
@@ -91,8 +91,16 @@ public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
                     },
                     () -> sendError(exchange, 404)
             );
+        } catch (BodyTooLargeException e) {
+            LOG.warning("SQSMock body too large: " + e.getMessage());
+            getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "body-too-large"));
+            sendError(exchange, 413);
         } catch (Exception e) {
+            LOG.severe("SQSMock error: " + e.getMessage());
             getMetricRegistry().counter(MetricRegistry.name(SQSMock.class, "other-error"));
+            sendError(exchange, 400);
+        } finally {
+            exchange.close();
         }
     }
 
@@ -100,7 +108,9 @@ public class SQSMock implements HttpInstabilityBehavior, MetricsAvailable {
         try {
             exchange.sendResponseHeaders(status, -1);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            // response could not be sent (e.g. headers already sent);
+            // the connection will be closed by the caller's finally block
+            LOG.fine("SQSMock failed to send error response: " + e.getMessage());
         }
     }
 }

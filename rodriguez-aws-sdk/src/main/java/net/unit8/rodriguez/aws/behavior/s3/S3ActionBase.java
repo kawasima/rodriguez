@@ -3,6 +3,7 @@ package net.unit8.rodriguez.aws.behavior.s3;
 import net.unit8.rodriguez.aws.MockAction;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -52,5 +53,54 @@ public abstract class S3ActionBase<T> implements MockAction<T> {
      */
     public void setS3Directory(File directory) {
         s3Directory = directory;
+    }
+
+    /**
+     * Safely resolves a bucket directory under the S3 storage root.
+     *
+     * @param bucketName the bucket name from the request
+     * @return the resolved bucket path, guaranteed to be contained within the storage root
+     * @throws S3AccessDeniedException if the storage root is unset, the name is
+     *                                 invalid, or the resolved path escapes the root
+     */
+    protected Path resolveBucketPath(String bucketName) {
+        return resolveWithin(bucketName);
+    }
+
+    /**
+     * Safely resolves an object file under the given bucket within the S3 storage root.
+     *
+     * @param bucketName the bucket name from the request
+     * @param objectName the object name from the request
+     * @return the resolved object path, guaranteed to be contained within the storage root
+     * @throws S3AccessDeniedException if the storage root is unset, a name is
+     *                                 invalid, or the resolved path escapes the root
+     */
+    protected Path resolveObjectPath(String bucketName, String objectName) {
+        return resolveWithin(bucketName, objectName);
+    }
+
+    /**
+     * Resolves the given path segments under the normalized storage root and
+     * verifies that the result stays inside it, rejecting {@code ..} / absolute
+     * escapes so that no request can read, write, or delete files outside the root.
+     */
+    private Path resolveWithin(String... segments) {
+        if (s3Directory == null) {
+            throw new S3AccessDeniedException("S3 storage directory is not configured");
+        }
+        Path root = s3Directory.toPath().toAbsolutePath().normalize();
+        Path resolved = root;
+        for (String segment : segments) {
+            if (segment == null || segment.isEmpty() || segment.equals("..")) {
+                throw new S3AccessDeniedException("Invalid path segment: " + segment);
+            }
+            resolved = resolved.resolve(segment);
+        }
+        resolved = resolved.normalize();
+        if (!resolved.startsWith(root)) {
+            throw new S3AccessDeniedException("Resolved path escapes the storage root: " + resolved);
+        }
+        return resolved;
     }
 }

@@ -60,16 +60,18 @@ public class MetricRegistry {
      * Registers a metric under the given name.
      *
      * <p>If a metric with the same name already exists, the existing metric is kept
-     * but the new metric is still returned.
+     * and returned so that all callers share the same instance; otherwise the given
+     * metric is registered and returned.
      *
      * @param <T>    the type of the metric
      * @param name   the name to register the metric under
      * @param metric the metric instance to register
-     * @return the given metric instance
+     * @return the metric now associated with the name (existing or given)
      */
+    @SuppressWarnings("unchecked")
     public <T extends Metric> T register(String name, T metric) {
          final Metric existing = metrics.putIfAbsent(name, metric);
-         return metric;
+         return existing != null ? (T) existing : metric;
     }
 
     /**
@@ -93,12 +95,7 @@ public class MetricRegistry {
 
     @SuppressWarnings("unchecked")
     private <T extends Metric> T getOrAdd(String name, MetricBuilder<T> builder) {
-        final Metric metric = metrics.get(name);
-        if (metric != null) {
-            return (T) metric;
-        } else {
-            return register(name, builder.newMetric());
-        }
+        return (T) metrics.computeIfAbsent(name, key -> builder.newMetric());
     }
 
    private interface MetricBuilder<T extends Metric> {

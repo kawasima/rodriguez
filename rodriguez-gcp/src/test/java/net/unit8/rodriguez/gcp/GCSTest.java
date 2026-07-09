@@ -262,6 +262,47 @@ class GCSTest {
     }
 
     @Test
+    void downloadWithTraversingObjectNameIsRejected() throws Exception {
+        // Percent-encoded "../../../../etc/passwd" is decoded by the HTTP server
+        // into the object name; the mock must reject it instead of reading
+        // outside the storage root.
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL
+                                + "/storage/v1/b/any-bucket/o/..%2F..%2F..%2F..%2Fetc%2Fpasswd?alt=media"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).doesNotContain("root:");
+    }
+
+    @Test
+    void uploadWithTraversingObjectNameIsRejected() throws Exception {
+        // Create a real bucket so the request reaches the upload action.
+        String bucketBody = mapper.writeValueAsString(Map.of("name", "traversal-bucket"));
+        httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL + "/storage/v1/b?project=" + PROJECT))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(bucketBody))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> response = httpClient.send(
+                HttpRequest.newBuilder()
+                        .uri(URI.create(BASE_URL
+                                + "/upload/storage/v1/b/traversal-bucket/o?uploadType=media&name=..%2F..%2F..%2Fescape.txt"))
+                        .header("Content-Type", "text/plain")
+                        .POST(HttpRequest.BodyPublishers.ofString("owned"))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
+    }
+
+    @Test
     void unsupportedMethodReturns404() throws Exception {
         // PUT is not mapped to any GCSAction, so it should return 404
         HttpResponse<String> response = httpClient.send(

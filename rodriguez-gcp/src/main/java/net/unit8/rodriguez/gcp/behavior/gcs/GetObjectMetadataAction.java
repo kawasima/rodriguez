@@ -3,7 +3,6 @@ package net.unit8.rodriguez.gcp.behavior.gcs;
 import net.unit8.rodriguez.gcp.GCSRequest;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,7 +23,7 @@ public class GetObjectMetadataAction extends GCSActionBase<Map<String, Object>> 
         String bucketName = request.getQueryParam("_bucketName");
         String objectName = request.getQueryParam("_objectName");
 
-        File file = getGcsDirectory().toPath().resolve(bucketName).resolve(objectName).toFile();
+        File file = resolveObjectPath(bucketName, objectName).toFile();
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("kind", "storage#object");

@@ -7,7 +7,9 @@ import net.unit8.rodriguez.proxy.model.FaultRule;
 import net.unit8.rodriguez.proxy.store.FaultRuleStore;
 import net.unit8.rodriguez.proxy.store.ObservedPathStore;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -82,17 +84,25 @@ public class ProxyHandler implements HttpHandler {
             String query = exchange.getRequestURI().getRawQuery();
             String targetUri = targetBase + path + (query != null ? "?" + query : "");
 
+            // Fast-path rejection when Content-Length advertises an oversized body.
             String contentLengthHeader = exchange.getRequestHeaders().getFirst("Content-Length");
             if (contentLengthHeader != null) {
-                long contentLength = Long.parseLong(contentLengthHeader);
-                if (contentLength > config.getMaxRequestBodyBytes()) {
-                    exchange.sendResponseHeaders(413, -1);
-                    exchange.close();
-                    return;
+                try {
+                    if (Long.parseLong(contentLengthHeader) > config.getMaxRequestBodyBytes()) {
+                        exchange.sendResponseHeaders(413, -1);
+                        exchange.close();
+                        return;
+                    }
+                } catch (NumberFormatException ignore) {
+                    // Malformed header; the bounded read below still enforces the limit.
                 }
             }
-            byte[] requestBody = exchange.getRequestBody().readAllBytes();
-            if (requestBody.length > config.getMaxRequestBodyBytes()) {
+
+            // Enforce the limit while reading regardless of Content-Length, so a chunked
+            // request with no Content-Length cannot buffer an unbounded body (OOM).
+            byte[] requestBody = readBounded(
+                    exchange.getRequestBody(), config.getMaxRequestBodyBytes());
+            if (requestBody == null) {
                 exchange.sendResponseHeaders(413, -1);
                 exchange.close();
                 return;
@@ -149,5 +159,27 @@ public class ProxyHandler implements HttpHandler {
 
     private static boolean isHopByHop(String header) {
         return HOP_BY_HOP_HEADERS.contains(header.toLowerCase());
+    }
+
+    /**
+     * Reads the input stream into a byte array, aborting once {@code maxBytes} is exceeded.
+     *
+     * @param in       the request body input stream
+     * @param maxBytes the maximum number of bytes to buffer
+     * @return the buffered body, or {@code null} if the body exceeds {@code maxBytes}
+     */
+    static byte[] readBounded(InputStream in, long maxBytes) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        long total = 0;
+        int read;
+        while ((read = in.read(chunk)) != -1) {
+            total += read;
+            if (total > maxBytes) {
+                return null;
+            }
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
     }
 }
